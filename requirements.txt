@@ -1,0 +1,17 @@
+boto3
+dvc[s3]
+dvclive
+filelock
+numpy
+ray[all]
+torch
+torchvision
+
+#dvclive-ray
+datasets
+scipy
+scikit-learn
+transformers[torch]
+
+# dev
+jupyterlab

@@ -1,0 +1,21 @@
+stages:
+  train:
+    cmd: python pytorch_mnist/train.py
+    # cmd: python dvclive-ray/hf.py 
+plots:
+- results/dvclive/plots/metrics:
+    x: step
+    - step vs accuracy:
+          template: simple
+          x: step
+          y:
+              results/dvclive/plots/metrics/accuracy.tsv: accuracy
+
+    - step vs loss:
+          template: linear
+          x: step
+          y:
+              results/dvclive/plots/metrics/loss.tsv: loss
+
+metrics:
+- results/dvclive/metrics.json
