@@ -8,13 +8,20 @@ This tutorial will guide users through creating automated, scalable, and distrib
 
 ![DVC + Ray](src/static/preview.png "DVC + Ray")
 
-# Install 
+## Install 
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Run DVC pipeline 
+
+```bash
+dvc exp run
+```
+
 
 ## Run Ray Cluster (local)
 
@@ -35,32 +42,5 @@ dvc exp run
 
 Submit Ray job 
 ```bash
-ray job submit --working-dir . -- python examples/scalable_dataset.py
-ray job submit --working-dir . -- python examples/tune_get_started.py
-ray job submit --working-dir . -- python examples/pytorch_mnist.py
+ray job submit --working-dir . -- python src/train.py
 ```
-
-## Run Cluster in Docker
-
-```bash
-docker run --shm-size=8G -v .://home/ray/ray-dvc \
-    -p 8265:8265 \
-    -t -i rayproject/ray-ml:nightly-py310-cpu
-```
-
-Submit Ray job
-```bash
-ray job submit --working-dir . -- python ray-dvc/examples/scalable_dataset.py
-```
-
-## Stop Ray Cluster 
-```bash
-ray stop
-```
-
-
-# TODO 
-- Add `save_dvclive` stage 
-- Add `results/experiment_name` to `.gitignore`
-- Test with Studio 
-- Test with AWS cluster
