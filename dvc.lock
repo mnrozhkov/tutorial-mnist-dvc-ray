@@ -1,0 +1,36 @@
+schema: '2.0'
+stages:
+  train:
+    cmd: python src/stages/train.py --config params.yaml
+    deps:
+    - path: results/tune/best_params.yaml
+      hash: md5
+      md5: 3e64e7b1bc0c2af79b818564c477f089
+      size: 54
+    params:
+      params.yaml:
+        train:
+          results_dir: results/train
+          use_gpu: false
+          num_workers: 2
+          global_batch_size: 32
+          epoch_size: 5
+    outs:
+    - path: results/train/model.pth
+      hash: md5
+      md5: b7ee3eeb43ac8e878b4790165c0cda18
+      size: 9792
+  tune:
+    cmd: python src/stages/tune.py --config params.yaml
+    params:
+      params.yaml:
+        tune:
+          run_tune: true
+          epoch_size: 512
+          test_size: 256
+          results_dir: results/tune
+    outs:
+    - path: results/tune/best_params.yaml
+      hash: md5
+      md5: 3e64e7b1bc0c2af79b818564c477f089
+      size: 54

@@ -19,6 +19,7 @@ pip install -r requirements.txt
 ## Run DVC pipeline 
 
 ```bash
+export PYTHONPATH=$PWD
 dvc exp run
 ```
 

@@ -1,0 +1,12 @@
+tune: 
+  run_tune: True
+  epoch_size: 512
+  test_size: 256
+  results_dir: results/tune
+
+train:
+  results_dir: results/train
+  use_gpu: False
+  num_workers: 2
+  global_batch_size: 32
+  epoch_size: 5 

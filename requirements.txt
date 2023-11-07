@@ -2,6 +2,7 @@ boto3
 dvc[s3]
 dvclive
 filelock
+matplotlib
 numpy
 ray[all]
 torch

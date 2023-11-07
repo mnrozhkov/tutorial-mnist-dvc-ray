@@ -1,6 +1,9 @@
 # Tutorial
 .dev
 results/ray
+.python-version
+results/MNIST 
+results/ray_results
 
 
 # Byte-compiled / optimized / DLL files

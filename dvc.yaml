@@ -1,21 +1,22 @@
 stages:
+
+  tune:
+    cmd: python src/stages/tune.py --config params.yaml
+    params:
+    - tune
+    outs:
+    - ${tune.results_dir}/best_params.yaml:
+        cache: false
+        persist: true
+
   train:
-    cmd: python pytorch_mnist/train.py
-    # cmd: python dvclive-ray/hf.py 
+    cmd: python src/stages/train.py --config params.yaml
+    params:
+    - train
+    deps:
+    - ${tune.results_dir}/best_params.yaml
+    outs:
+    - ${train.results_dir}/model.pth
+
 plots:
-- results/dvclive/plots/metrics:
-    x: step
-    - step vs accuracy:
-          template: simple
-          x: step
-          y:
-              results/dvclive/plots/metrics/accuracy.tsv: accuracy
-
-    - step vs loss:
-          template: linear
-          x: step
-          y:
-              results/dvclive/plots/metrics/loss.tsv: loss
-
-metrics:
-- results/dvclive/metrics.json
+- results/tune/plots/images

@@ -1,0 +1,8 @@
+{
+  "train_loop_config": {
+    "batch_size_per_worker": 16,
+    "epochs": 5,
+    "lr": 0.0048194241739774515,
+    "momentum": 0.8442770266422165
+  }
+}
