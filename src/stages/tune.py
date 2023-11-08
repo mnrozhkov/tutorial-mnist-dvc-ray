@@ -2,7 +2,6 @@
 
 import os
 from pathlib import Path
-import dvc.api
 from dvclive import Live
 import argparse
 from filelock import FileLock
@@ -22,6 +21,7 @@ from torchvision import datasets, transforms
 import yaml
 
 from src.model import ConvNet
+import yaml
 
 
 # Change these values if you want the training to run quicker or slower.
@@ -192,6 +192,7 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
+    parser.add_argument("--config", help="DVC parameters")
     parser.add_argument(
         "--cuda", action="store_true", default=False, help="Enables GPU training"
     )
@@ -200,5 +201,6 @@ if __name__ == "__main__":
     )
     args, _ = parser.parse_known_args()
 
-    params: dict = dvc.api.params_show()
+    with open(args.config, 'r') as f:
+        params = yaml.safe_load(f)
     tune_hyperparameters(params, args.cuda, args.smoke_test)
