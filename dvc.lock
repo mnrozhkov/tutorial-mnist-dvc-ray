@@ -18,14 +18,14 @@ stages:
     outs:
     - path: results/train/model.pth
       hash: md5
-      md5: b7ee3eeb43ac8e878b4790165c0cda18
+      md5: dda0f9ab48a0a7d91700c0abe9f02ebc
       size: 9792
   tune:
-    cmd: python src/stages/tune.py --config params.yaml
+    cmd: ray job submit --working-dir $PWD -- python src/stages/tune.py --config params.yaml
     params:
       params.yaml:
         tune:
-          run_tune: true
+          run_tune: false
           epoch_size: 512
           test_size: 256
           results_dir: results/tune

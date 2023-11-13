@@ -1,7 +1,8 @@
 stages:
 
   tune:
-    cmd: python src/stages/tune.py --config params.yaml
+    # cmd: python src/stages/tune.py --config params.yaml
+    cmd: ray job submit --working-dir $PWD -- python src/stages/tune.py --config params.yaml
     params:
     - tune
     outs:
@@ -10,7 +11,8 @@ stages:
         persist: true
 
   train:
-    cmd: python src/stages/train.py --config params.yaml
+    # cmd: python src/stages/train.py --config params.yaml
+    cmd: ray job submit --working-dir $PWD -- python src/stages/train.py --config params.yaml
     params:
     - train
     deps:
@@ -19,4 +21,11 @@ stages:
     - ${train.results_dir}/model.pth
 
 plots:
-- results/tune/plots/images
+  - results/tune/plots/images
+  - training_iteration vs accuracy:
+      template: linear
+      x: training_iteration
+      y:
+        results/train/train_metrics.csv: accuracy
+
+

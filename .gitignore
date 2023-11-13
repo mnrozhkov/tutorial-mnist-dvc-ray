@@ -4,6 +4,7 @@ results/ray
 .python-version
 results/MNIST 
 results/ray_results
+notebooks
 
 
 # Byte-compiled / optimized / DLL files

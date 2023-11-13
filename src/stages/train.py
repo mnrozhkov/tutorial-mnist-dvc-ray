@@ -163,6 +163,7 @@ def train(params: dict) -> None:
         json.dump(train_report, f)
     
     DVCLIVE_PATH_SOURCE = Path(train_report.get('path'))
+    print(f"DVCLIVE_PATH_SOURCE: {DVCLIVE_PATH_SOURCE}")
     for filename in ['result.json', 'model.pth']: 
         shutil.copyfile(
             DVCLIVE_PATH_SOURCE / filename, 
