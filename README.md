@@ -133,6 +133,7 @@ Execute `dvc exp run` command on the cluster
 ```bash
 ray exec cluster.yaml "cd tutorial-mnist-dvc-ray && \
     export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray && \
+    
     dvc exp run"
 ```
 
