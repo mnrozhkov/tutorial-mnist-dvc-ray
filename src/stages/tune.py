@@ -124,8 +124,9 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
 
     EPOCH_SIZE = tune_params.get("epoch_size", 256) 
     TEST_SIZE = tune_params.get("test_size", 128)
-    TUNE_RESULTS_DIR = params.get("tune", {}).get("results_dir")
-    
+    TUNE_RESULTS_DIR = Path(params.get("tune", {}).get("results_dir"))
+    # tune_dir = Path(TUNE_RESULTS_DIR)
+    TUNE_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     ray.init(num_cpus=2 if is_smoke_test else None)
 
@@ -159,7 +160,7 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
     best_result: Result = results.get_best_result()
     best_params: Dict[str, Any] = best_result.config
     print("Tune - Best config is:", best_params)
-    BEST_PARAMS_PATH = Path(TUNE_RESULTS_DIR) / "best_params.yaml"
+    BEST_PARAMS_PATH = TUNE_RESULTS_DIR / "best_params.yaml"
     with open(BEST_PARAMS_PATH, 'w') as f:
         yaml.dump(best_params, f)
 

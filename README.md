@@ -17,109 +17,134 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Run DVC pipeline
+
+## Run DVC pipeline on Ray Cluster (local)
+
+### 1 - Start a Ray Cluster (local)
+
+Locally: cpu, single-node
+
+```bash
+export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
+ray start --head
+```
+
+To test running cluster you may run a test script : 
+
+```bash
+# Run a Python script with ray.init() 
+python src/test_scripts/hello_cluster.py
+
+# Submit a script as a Job
+ray job submit -- python src/test_scripts/hello_cluster.py
+```
+
+With running Ray Cluster you can submit a job:
+
+
+### 2 - Run DVC pipeline
 
 ```bash
 export PYTHONPATH=$PWD
 dvc exp run
 ```
 
-## Run Ray Cluster (local)
+## Run DVC pipeline on Ray Cluster (AWS)
 
-Locally: cpu, single-node
 
-```bash
-export RAY_ENABLE_WINDOWS_OR_OSX_CLUSTER=1
-ray start --head --port=6379
-```
-
-Run DVC pipeline
-
-```bash
-dvc exp run
-```
-
-### Examples
-
-Submit Ray job
-
-```bash
-ray job submit --working-dir . -- python src/train.py
-```
-
-## Run Ray Cluster at AWS
-
-Example: <https://docs.ray.io/en/latest/cluster/vms/examples/ml-example.html#clusters-vm-ml-example>
-
-## Deploy a Ray cluster
+### 1 - Start a Ray Cluster on AWS
 
 ```bash
 # Run a cluster
 ray up cluster.yaml  
 ```
 
-### Running Jobs Interactively
-If you would like to run an application interactively and see the output in real time (for example, during development or debugging), you can кun your script directly on a cluster node (e.g. after SSHing into the node using `ray attach`
+See more examples in [Ray Docs](https://docs.ray.io/en/latest/cluster/vms/examples/ml-example.html#clusters-vm-ml-example)
 
-```bash
-# Attach to ssha
-ray attach cluster.yaml
-
-# Exec shell commands
-ray exec cluster.yaml 'echo "hello world"'
-```
-
-### Open Ray Dashboard
+### 2 - Open Ray Dashboard
 
 ```bash
 ray dashboard cluster.yaml
 ```
 
-### Submit a job 
+### 3 - Work with Ray Cluster
 
-The ray submit and ray job submit commands are used in the Ray framework for different purposes.
+There are few options to interact with the Ray Cluster on AWS:
 
-#### `ray submit`
-ray submit is used to submit a Python script to a Ray cluster. The script is run on the head node of the cluster. This command is useful when you want to run a script on a Ray cluster without having to SSH into the head node and run the script manually.
+- Submit jobs (Ray scripts)
+- Attach to an interactive screen session on the cluster
+- Execute shell commands on the cluster
 
-```bash
-ray submit cluster.yaml src/mnist.py
-```
 
-#### `ray job submit`
-ray job submit, on the other hand, is part of Ray's job submission API, which is a higher-level API for running jobs on a Ray cluster. This command submits a job to the Ray cluster, where a job is defined as a Python script along with the necessary environment and dependencies. The job is run on the cluster and the results are returned when the job is finished.
-
-To tell the Ray Jobs CLI how to find your Ray Cluster, we will pass the Ray Dashboard address. This can be done by setting the RAY_ADDRESS environment variable ([docs](https://docs.ray.io/en/latest/cluster/running-applications/job-submission/quickstart.html?highlight=export%20address#submitting-a-job)):
+#### 3.1 - Submit ML trainig job to Ray Cluster
 
 ```bash
-
 export RAY_ADDRESS='http://localhost:8265'
-ray job submit --working-dir $PWD -- python src/mnist.py --config params.yaml
+ray job submit --working-dir $PWD -- python src/test_scripts/mnist.py
 ```
 
-Test:
-```bash
-ray job submit --working-dir $PWD -- python src/mnist.py
-ray job submit --working-dir $PWD -- python src/stages/tune.py
-ray job submit --working-dir $PWD -- dvc exp run
-```
+#### 3.2 - Attach to an interactive screen session on the cluster (via SSH)
 
-### Stop Cluster
+If you would like to run an application interactively and see the output in real time (for example, during development or debugging), you can кun your script directly on a cluster node (e.g. after SSHing into the node using `ray attach`
 
 ```bash
-ray down .dev/cluster/demo.yaml 
+ray attach cluster.yaml
 ```
 
+#### 3.3 - Execute shell commands on the cluster
 
-### Run DVC pipeline on Ray Cluster (remote)
+Also, you may want to execute `shell` commands on a cluster 
+```bash
+ray exec cluster.yaml 'echo "hello world"'
+```
+
+### 4 - (option 1) Connect to the cluster and run DVC pipeline
+
+Connect to the session on the cluster 
+```bash
+ray attach cluster.yaml
+```
+
+Run ML pipeline with DVC and commit results 
+```bash
+# Clone repo to the cluster
+git clone https://github.com/mnrozhkov/tutorial-mnist-dvc-ray.git
+
+# Navigate to the repo & run 
+cd tutorial-mnist-dvc-ray
+PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray
+dvc exp run
+```
+
+### 5 - (option 1) Run DVC pipeline on Ray Cluster from a laptop
+
+Clone repo to the cluster
 
 ```bash
 ray exec cluster.yaml "git clone https://github.com/mnrozhkov/tutorial-mnist-dvc-ray.git"
-ray exec cluster.yaml "cd tutorial-mnist-dvc-ray && \
-    export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray && \
-    dvc exp run"
+```
+
+Execute `dvc exp run` command on the cluster
+
+```bash
 ray exec cluster.yaml "cd tutorial-mnist-dvc-ray && \
     export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray && \
     dvc exp run"
 ```
 
+Download (sync) the repository to results
+
+```bash
+ray rsync_down cluster.yaml '/home/ray/tutorial-mnist-dvc-ray/' $PWD
+```
+
+Commit results if needed.
+
+
+## Stop Cluster
+
+Don't remember to stop remote cluster after work is done. Save money and the planet!
+
+```bash
+ray down cluster.yaml 
+```
