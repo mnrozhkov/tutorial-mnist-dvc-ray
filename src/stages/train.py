@@ -5,7 +5,6 @@ Source: https://docs.ray.io/en/latest/ray-overview/getting-started.html
 import argparse
 import json
 import shutil
-import dvc.api
 import os
 from pathlib import Path
 from typing import Dict
@@ -164,6 +163,7 @@ def train(params: dict) -> None:
         json.dump(train_report, f)
     
     DVCLIVE_PATH_SOURCE = Path(train_report.get('path'))
+    print(f"DVCLIVE_PATH_SOURCE: {DVCLIVE_PATH_SOURCE}")
     for filename in ['result.json', 'model.pth']: 
         shutil.copyfile(
             DVCLIVE_PATH_SOURCE / filename, 
@@ -171,8 +171,14 @@ def train(params: dict) -> None:
             )
 
 if __name__ == "__main__":
+
+    # os.environ["RAY_AIR_LOCAL_CACHE_DIR"] = "results"
+
+    parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
+    parser.add_argument("--config", help="DVC parameters")
+    args, _ = parser.parse_known_args()
     
-    os.environ["RAY_AIR_LOCAL_CACHE_DIR"] = "results"
-    params: dict = dvc.api.params_show()
+    with open(args.config, 'r') as f:
+        params = yaml.safe_load(f)
 
     train(params)
