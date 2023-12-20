@@ -7,7 +7,7 @@ numpy
 ray[all]
 torch
 torchvision
-
+async-timeout
 #dvclive-ray
 datasets
 scipy
