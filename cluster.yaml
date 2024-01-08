@@ -85,11 +85,11 @@ available_node_types:
             # for default images for other zones.
             ImageId: ami-0387d929287ab193e
             # You can provision additional disk space with a conf as follows
-            # BlockDeviceMappings:
-            #     - DeviceName: /dev/sda1
-            #       Ebs:
-            #           VolumeSize: 140
-            #           VolumeType: gp3
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 140
+                      VolumeType: gp3
             # Additional options in the boto docs.
     ray.worker.default:
         # The minimum number of worker nodes of this type to launch.

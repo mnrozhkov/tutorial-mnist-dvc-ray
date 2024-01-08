@@ -6,6 +6,7 @@ import argparse
 import json
 import shutil
 import os
+import logging
 from pathlib import Path
 from typing import Dict
 from tqdm import tqdm
@@ -24,6 +25,12 @@ from src.model import ConvNet
 
 
 def train_func_per_worker(config: Dict):
+
+    # logging.basicConfig(
+    #     level=logging.DEBUG, 
+    #     format='%(asctime)s - %(message)s',
+    # )
+        
     lr = config["lr"]
     epochs = config["epochs"]
     batch_size = config["batch_size_per_worker"]
@@ -50,48 +57,72 @@ def train_func_per_worker(config: Dict):
     train_context = get_context()
     rank = train_context.get_local_rank()
 
-    for epoch in range(epochs):
+    from dvclive import Live
+    with Live(
+        dir='results/dvclive', 
+        # dvcyaml=True, 
+        # save_dvc_exp=False, 
+        ) as live:
 
-        model.train()
-        for X, y in tqdm(train_dataloader, desc=f"Train Epoch {epoch}"):
-            pred = model(X)
-            loss = loss_fn(pred, y)
+        for epoch in range(epochs):
 
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-        model.eval()
-        test_loss, num_correct, num_total = 0, 0, 0
-        with torch.no_grad():
-            for X, y in tqdm(test_dataloader, desc=f"Test Epoch {epoch}"):
+            model.train()
+            for X, y in tqdm(train_dataloader, desc=f"Train Epoch {epoch}"):
                 pred = model(X)
                 loss = loss_fn(pred, y)
 
-                test_loss += loss.item()
-                num_total += y.shape[0]
-                num_correct += (pred.argmax(1) == y).sum().item()
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-        test_loss /= len(test_dataloader)
-        accuracy = num_correct / num_total
+            model.eval()
+            test_loss, num_correct, num_total = 0, 0, 0
+            with torch.no_grad():
+                for X, y in tqdm(test_dataloader, desc=f"Test Epoch {epoch}"):
+                    pred = model(X)
+                    loss = loss_fn(pred, y)
 
-        # [3] Report metrics to Ray Train
-        # ===============================
-        checkpoint_dir = "."
-        checkpoint_path = checkpoint_dir + "/model.pth"
-        torch.save(model.state_dict(), checkpoint_path)
-        
-        ray.train.report(
-            metrics={"loss": test_loss, "accuracy": accuracy},
-            checkpoint=Checkpoint.from_directory(checkpoint_dir)
-        )
+                    test_loss += loss.item()
+                    num_total += y.shape[0]
+                    num_correct += (pred.argmax(1) == y).sum().item()
 
-        # Log metrics with print() 
-        if rank == 0:
-            print("loss", test_loss)
-            print("accuracy", accuracy)
-            print("---NEXT STEP---")
+            test_loss /= len(test_dataloader)
+            accuracy = num_correct / num_total
 
+            # [3] Report metrics to Ray Train
+            # ===============================
+            checkpoint_dir = "."
+            checkpoint_path = checkpoint_dir + "/model.pth"
+            torch.save(model.state_dict(), checkpoint_path)
+            
+            ray.train.report(
+                metrics={"loss": test_loss, "accuracy": accuracy},
+                checkpoint=Checkpoint.from_directory(checkpoint_dir)
+            )
+
+            # # Log metrics with print() 
+            # if rank == 0:
+            #     print("loss", test_loss)
+            #     print("accuracy", accuracy)
+            #     print("---NEXT STEP---")
+
+            # [4] Log metrics with DVCLive 
+            # ===============================
+            # if rank == 0:
+            print("-------------------")
+            print(f"LOG METRICS WITH DVCLIVE - Worker global rank={rank}")
+            print("epoch - ", epoch)
+            print("loss - ", test_loss)
+            print("accuracy - ", accuracy)
+            print("node rank - ", train_context.get_node_rank())
+            print("worker local rank - ", train_context.get_local_rank())
+            print("worker global rank - ", train_context.get_world_rank())
+            print("-------------------")
+            live.log_metric("loss", test_loss)
+            live.log_metric("accuracy", accuracy)
+            live.next_step()
+
+            
 
 def train(params: dict) -> None:
 
@@ -169,6 +200,7 @@ def train(params: dict) -> None:
             DVCLIVE_PATH_SOURCE / filename, 
             Path(TRAIN_RESULTS_DIR).resolve() / filename
             )
+    
 
 if __name__ == "__main__":
 

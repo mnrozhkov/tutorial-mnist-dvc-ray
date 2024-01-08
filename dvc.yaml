@@ -9,7 +9,7 @@ stages:
     outs:
     - ${tune.results_dir}/best_params.yaml:
         cache: false
-        persist: true
+        # persist: true
 
   train:
     cmd: python src/stages/train.py --config params.yaml
