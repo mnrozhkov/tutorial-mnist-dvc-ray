@@ -5,7 +5,7 @@ stages:
     deps:
     - path: results/tune/best_params.yaml
       hash: md5
-      md5: b6458af7294a9dbe8c10b808d40dd241
+      md5: 1e92a177f84121fe7aac6752a1eb0e55
       size: 55
     params:
       params.yaml:
@@ -18,7 +18,7 @@ stages:
     outs:
     - path: results/train/model.pth
       hash: md5
-      md5: 851999c0f2466966c8c0eecefdab0195
+      md5: d22e1066a087914028ce90e4e1de82c1
       size: 9792
   tune:
     cmd: python src/stages/tune.py --config params.yaml
@@ -32,5 +32,5 @@ stages:
     outs:
     - path: results/tune/best_params.yaml
       hash: md5
-      md5: b6458af7294a9dbe8c10b808d40dd241
+      md5: 1e92a177f84121fe7aac6752a1eb0e55
       size: 55

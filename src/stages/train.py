@@ -9,6 +9,7 @@ import os
 import logging
 from pathlib import Path
 from typing import Dict
+from regex import P
 from tqdm import tqdm
 import yaml
 
@@ -22,14 +23,10 @@ from torch import nn
 
 from src.helpers import get_dataloaders
 from src.model import ConvNet
+from src.live import DVCLiveLoggerCallback, DVCLiveS3SyncRunner, StorageObject
 
 
 def train_func_per_worker(config: Dict):
-
-    # logging.basicConfig(
-    #     level=logging.DEBUG, 
-    #     format='%(asctime)s - %(message)s',
-    # )
         
     lr = config["lr"]
     epochs = config["epochs"]
@@ -54,75 +51,106 @@ def train_func_per_worker(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
-    train_context = get_context()
-    rank = train_context.get_local_rank()
+    # train_context = get_context()
+    # worker_rank = ray.train.get_context().train_context.get_local_rank()
+    worker_rank = ray.train.get_context().get_world_rank()
+    
+    # [3] Set up Live object for DVCLive
+    # ===============================
+    print("#############################################")
+    print(config.get("dvc_env", None))
+    dvc_env = config.get("dvc_env", None)
+    if dvc_env:
+        for name, value in  dvc_env.items():
+            os.environ[name] = value
+    os.environ["DVC_STUDIO_OFFLINE"] = "false"
+    print("#############################################")
 
-    from dvclive import Live
-    with Live(
-        dir='results/dvclive', 
-        # dvcyaml=True, 
-        # save_dvc_exp=False, 
-        ) as live:
+    live = None
+    if worker_rank == 0:
+        # from dvclive import Live
+        # live = Live(
+        #     dir='/tmp/results/dvclive', 
+        #     dvcyaml=True, 
+        #     save_dvc_exp=True, 
+        #     # exp_name=ray.train.get_context().get_experiment_name(),
+        #     )
+        from src.live import DVCLiveRayLogger as Live
+        live = Live(
+            dir='results/dvclive', 
+            # dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',
+            dvcyaml=False, 
+            save_dvc_exp=False, 
+            # exp_name=ray.train.get_context().get_experiment_name(),
+            bucket_name = "cse-cloud-version",
+            s3_directory = "tutorial-mnist-dvc-ray/dvclive",
+            # trail_dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',   
+        )
 
-        for epoch in range(epochs):
+        print("#############################################")
+        print("RAY_TRAIN_CONTEXT")
+        print(ray.train.get_context().get_experiment_name())
+        print(ray.train.get_context().get_metadata())
+        print(ray.train.get_context().get_storage())
+        print("TRIAL_DIR", ray.train.get_context().get_trial_dir())
+        print("TRIAL_NAME", ray.train.get_context().get_trial_name())
+        print("Live.dir", live.dir)
+        print("Live.params_file", live.params_file)
+        print("#############################################")
 
-            model.train()
-            for X, y in tqdm(train_dataloader, desc=f"Train Epoch {epoch}"):
+    for epoch in range(epochs):
+
+        model.train()
+        for X, y in tqdm(train_dataloader, desc=f"Train Epoch {epoch}"):
+            pred = model(X)
+            loss = loss_fn(pred, y)
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+        model.eval()
+        test_loss, num_correct, num_total = 0, 0, 0
+        with torch.no_grad():
+            for X, y in tqdm(test_dataloader, desc=f"Test Epoch {epoch}"):
                 pred = model(X)
                 loss = loss_fn(pred, y)
 
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
+                test_loss += loss.item()
+                num_total += y.shape[0]
+                num_correct += (pred.argmax(1) == y).sum().item()
 
-            model.eval()
-            test_loss, num_correct, num_total = 0, 0, 0
-            with torch.no_grad():
-                for X, y in tqdm(test_dataloader, desc=f"Test Epoch {epoch}"):
-                    pred = model(X)
-                    loss = loss_fn(pred, y)
+        test_loss /= len(test_dataloader)
+        accuracy = num_correct / num_total
 
-                    test_loss += loss.item()
-                    num_total += y.shape[0]
-                    num_correct += (pred.argmax(1) == y).sum().item()
+        # [4] Report metrics to Ray Train
+        # ===============================
+        checkpoint_dir = "."
+        checkpoint_path = checkpoint_dir + "/model.pth"
+        torch.save(model.state_dict(), checkpoint_path)
+        
+        ray.train.report(
+            metrics={"loss": test_loss, "accuracy": accuracy},
+            checkpoint=Checkpoint.from_directory(checkpoint_dir)
+        )
 
-            test_loss /= len(test_dataloader)
-            accuracy = num_correct / num_total
+        # [5] Log metrics with DVCLive 
+        # ===============================
+        if worker_rank == 0:
+            if live:
+                print("-------------------")
+                print(f"LOG METRICS WITH DVCLIVE")
+                print("worker local rank - ", ray.train.get_context().get_local_rank())
+                print("worker global rank - ", ray.train.get_context().get_world_rank())
+                print("node rank - ", ray.train.get_context().get_node_rank())
+                print("epoch - ", epoch)
+                print("loss - ", test_loss)
+                print("accuracy - ", accuracy)
+                print("-------------------")
+                live.log_metric("loss", test_loss)
+                live.log_metric("accuracy", accuracy)
+                live.next_step()
 
-            # [3] Report metrics to Ray Train
-            # ===============================
-            checkpoint_dir = "."
-            checkpoint_path = checkpoint_dir + "/model.pth"
-            torch.save(model.state_dict(), checkpoint_path)
-            
-            ray.train.report(
-                metrics={"loss": test_loss, "accuracy": accuracy},
-                checkpoint=Checkpoint.from_directory(checkpoint_dir)
-            )
-
-            # # Log metrics with print() 
-            # if rank == 0:
-            #     print("loss", test_loss)
-            #     print("accuracy", accuracy)
-            #     print("---NEXT STEP---")
-
-            # [4] Log metrics with DVCLive 
-            # ===============================
-            # if rank == 0:
-            print("-------------------")
-            print(f"LOG METRICS WITH DVCLIVE - Worker global rank={rank}")
-            print("epoch - ", epoch)
-            print("loss - ", test_loss)
-            print("accuracy - ", accuracy)
-            print("node rank - ", train_context.get_node_rank())
-            print("worker local rank - ", train_context.get_local_rank())
-            print("worker global rank - ", train_context.get_world_rank())
-            print("-------------------")
-            live.log_metric("loss", test_loss)
-            live.log_metric("accuracy", accuracy)
-            live.next_step()
-
-            
 
 def train(params: dict) -> None:
 
@@ -144,12 +172,28 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
+        # "DVC_EXP_BASELINE_REV": os.getenv(env.DVC_EXP_BASELINE_REV, "")
+        # "DVC_EXP_NAME": os.getenv(env.DVC_EXP_NAME, "")
+        "dvc_env": {name: value for name, value in os.environ.items() if name.startswith("DVC")}
     }
+
+    # print("#############################################")
+    # # print("DVC_EXP_NAME: ", os.getenv("DVC_EXP_NAME", None))
+    # # print("DVC_EXP_BASELINE_REV: ", os.getenv("DVC_EXP_BASELINE_REV", None))
+    # # print("DVC_ROOT: ", os.getenv("DVC_ROOT", None))
+    # # print("DVC_STUDIO_URL: ", os.getenv("DVC_STUDIO_URL", None))
+    # # print("DVC_STUDIO_REPO_URL: ", os.getenv("DVC_STUDIO_REPO_URL", None))
+    # # print("DVC_STUDIO_TOKEN: ", os.getenv("DVC_STUDIO_TOKEN", None))
+    # # for name, value in os.environ.items():
+    # #     if name.startswith("DVC"):
+    # #         print("{0}: {1}".format(name, value))
+    # print(train_config.get("dvc_env", None))
+    # print("#############################################")
 
     # [2] Configure computation resources
     # =============================================
     scaling_config = ScalingConfig(num_workers=NUM_WORKERS, use_gpu=USE_GPU)
-    # sync_config = ray.train.SyncConfig(sync_artifacts=True)
+    sync_config = ray.train.SyncConfig(sync_artifacts=True)
 
     # [3] Initialize a Ray TorchTrainer
     # =============================================
@@ -163,6 +207,14 @@ def train(params: dict) -> None:
             local_dir=RAY_RESULTS_DIR,
             # storage_path=RAY_RESULTS_DIR,
             # sync_config=sync_config
+            log_to_file=True,
+            # callbacks=[
+            #     DVCLiveLoggerCallback(
+            #         dir = "/tmp/results/dvclive",
+            #         bucket_name = "cse-cloud-version",
+            #         s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+            #     ),
+            # ]
         )
     )
 
@@ -199,7 +251,7 @@ def train(params: dict) -> None:
         shutil.copyfile(
             DVCLIVE_PATH_SOURCE / filename, 
             Path(TRAIN_RESULTS_DIR).resolve() / filename
-            )
+        )
     
 
 if __name__ == "__main__":
@@ -213,4 +265,18 @@ if __name__ == "__main__":
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
 
+    # [1] Prepare StorageObject to sync DVCLive logs
+    # =============================================
+    bucket_name = "cse-cloud-version"
+    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+    storage = StorageObject(bucket_name, s3_directory)
+    dvclive_sync_runner = DVCLiveS3SyncRunner(storage, "results/dvclive")
+
+    # [2] Start DVCLive sync runner
+    dvclive_sync_runner.start()
+
+    # [3] Start Training
     train(params)
+
+    # [4] Stop DVCLive sync runner
+    dvclive_sync_runner.stop()
