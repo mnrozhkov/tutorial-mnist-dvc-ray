@@ -58,7 +58,7 @@ class StorageObject:
 
                 print("##################################################")
                 print(f"\nCALLBACK - Uploading {local_file_path}... \n")
-                print(f"\nCALLBACK - Uploading {os.path.abspath(local_file_path)}... \n")
+                print(f"CALLBACK - Uploading {os.path.abspath(local_file_path)}... \n")
                 print("##################################################")
 
                 relative_path = os.path.relpath(local_file_path, directory_path)
@@ -107,7 +107,7 @@ class DVCLiveLoggerCallback(Callback):
 
     def on_checkpoint(self, **info) -> None:
         # Push the directory where checkpoints are saved
-        print("\nDVCLiveLogger: PUSH METRICS")
+        print("\nDVCLiveLoggerCallback: PUSH METRICS (on_checkpoint)")
         print(info)
         storage = self._get_storage()
         storage.push(self.dir, force=True)

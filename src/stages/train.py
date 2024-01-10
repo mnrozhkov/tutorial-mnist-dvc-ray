@@ -31,6 +31,7 @@ def train_func_per_worker(config: Dict):
     lr = config["lr"]
     epochs = config["epochs"]
     batch_size = config["batch_size_per_worker"]
+    worker_rank = ray.train.get_context().get_world_rank()
 
     # Get dataloaders inside worker training function
     train_dataloader, test_dataloader = get_dataloaders(batch_size=batch_size)
@@ -41,7 +42,6 @@ def train_func_per_worker(config: Dict):
     train_dataloader = ray.train.torch.prepare_data_loader(train_dataloader)
     test_dataloader = ray.train.torch.prepare_data_loader(test_dataloader)
 
-
     # [2] Prepare and wrap your model with DistributedDataParallel
     # Move the model the correct GPU/CPU device
     # ============================================================
@@ -51,9 +51,7 @@ def train_func_per_worker(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
-    # train_context = get_context()
-    # worker_rank = ray.train.get_context().train_context.get_local_rank()
-    worker_rank = ray.train.get_context().get_world_rank()
+    
     
     # [3] Set up Live object for DVCLive
     # ===============================
@@ -63,25 +61,17 @@ def train_func_per_worker(config: Dict):
     if dvc_env:
         for name, value in  dvc_env.items():
             os.environ[name] = value
-    os.environ["DVC_STUDIO_OFFLINE"] = "false"
     print("#############################################")
 
     live = None
     if worker_rank == 0:
         # from dvclive import Live
-        # live = Live(
-        #     dir='/tmp/results/dvclive', 
-        #     dvcyaml=True, 
-        #     save_dvc_exp=True, 
-        #     # exp_name=ray.train.get_context().get_experiment_name(),
-        #     )
         from src.live import DVCLiveRayLogger as Live
         live = Live(
             dir='results/dvclive', 
             # dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',
             dvcyaml=False, 
             save_dvc_exp=False, 
-            # exp_name=ray.train.get_context().get_experiment_name(),
             bucket_name = "cse-cloud-version",
             s3_directory = "tutorial-mnist-dvc-ray/dvclive",
             # trail_dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',   
@@ -172,23 +162,8 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
-        # "DVC_EXP_BASELINE_REV": os.getenv(env.DVC_EXP_BASELINE_REV, "")
-        # "DVC_EXP_NAME": os.getenv(env.DVC_EXP_NAME, "")
         "dvc_env": {name: value for name, value in os.environ.items() if name.startswith("DVC")}
     }
-
-    # print("#############################################")
-    # # print("DVC_EXP_NAME: ", os.getenv("DVC_EXP_NAME", None))
-    # # print("DVC_EXP_BASELINE_REV: ", os.getenv("DVC_EXP_BASELINE_REV", None))
-    # # print("DVC_ROOT: ", os.getenv("DVC_ROOT", None))
-    # # print("DVC_STUDIO_URL: ", os.getenv("DVC_STUDIO_URL", None))
-    # # print("DVC_STUDIO_REPO_URL: ", os.getenv("DVC_STUDIO_REPO_URL", None))
-    # # print("DVC_STUDIO_TOKEN: ", os.getenv("DVC_STUDIO_TOKEN", None))
-    # # for name, value in os.environ.items():
-    # #     if name.startswith("DVC"):
-    # #         print("{0}: {1}".format(name, value))
-    # print(train_config.get("dvc_env", None))
-    # print("#############################################")
 
     # [2] Configure computation resources
     # =============================================
@@ -228,7 +203,6 @@ def train(params: dict) -> None:
     print(f"result.metrics: {result.metrics}")
     print(f"result.metrics_dataframe: {result.metrics_dataframe}")
     print(f"result.config: {result.config}")
-    
     if result.checkpoint:
         print(f"result.checkpoint.path: {result.checkpoint.path}")
     
@@ -236,7 +210,6 @@ def train(params: dict) -> None:
     train_metrics_df = result.metrics_dataframe
     TRAIN_METRICS_PATH = "results/train/train_metrics.csv"
     train_metrics_df.to_csv(TRAIN_METRICS_PATH)
-
     train_report = {
         'config': result.config,
         'path': result.path,
@@ -255,8 +228,6 @@ def train(params: dict) -> None:
     
 
 if __name__ == "__main__":
-
-    # os.environ["RAY_AIR_LOCAL_CACHE_DIR"] = "results"
 
     parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
     parser.add_argument("--config", help="DVC parameters")

@@ -18,7 +18,7 @@ stages:
     outs:
     - path: results/train/model.pth
       hash: md5
-      md5: d22e1066a087914028ce90e4e1de82c1
+      md5: 9fe0163ee217a12da34b89ab79886e84
       size: 9792
   tune:
     cmd: python src/stages/tune.py --config params.yaml
