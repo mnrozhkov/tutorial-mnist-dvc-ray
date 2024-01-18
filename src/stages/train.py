@@ -68,7 +68,8 @@ def train_func_per_worker(config: Dict):
         # from dvclive import Live
         from src.live import DVCLiveRayLogger as Live
         live = Live(
-            dir='results/dvclive', 
+            dir='/tmp/dvclive',      
+            # dir='results/dvclive',  # leads to metric path in Ray’s session trial_dir
             # dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',
             dvcyaml=False, 
             save_dvc_exp=False, 
@@ -168,7 +169,7 @@ def train(params: dict) -> None:
     # [2] Configure computation resources
     # =============================================
     scaling_config = ScalingConfig(num_workers=NUM_WORKERS, use_gpu=USE_GPU)
-    sync_config = ray.train.SyncConfig(sync_artifacts=True)
+    # sync_config = ray.train.SyncConfig(sync_artifacts=True)
 
     # [3] Initialize a Ray TorchTrainer
     # =============================================
@@ -251,3 +252,6 @@ if __name__ == "__main__":
 
     # [4] Stop DVCLive sync runner
     dvclive_sync_runner.stop()
+
+    # [5] Finally pull the latest version of DVCLive logs
+    dvclive_sync_runner.pull_from_storage(storage, "results/dvclive")

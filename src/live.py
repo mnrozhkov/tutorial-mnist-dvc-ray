@@ -1,11 +1,6 @@
-import asyncio
 import boto3
 import os
-from pathlib import Path
-from dvclive.lightning import DVCLiveLogger as _DVCLiveLogger
-from dvclive.lightning import ModelCheckpoint, rank_zero_only
-from botocore.exceptions import NoCredentialsError
-from pyparsing import C
+from botocore.exceptions import NoCredentialsError, ClientError
 from ray.tune import Callback
 import time
 import threading
@@ -24,20 +19,21 @@ class StorageObject:
         return self._s3
 
     def _create_s3_client(self):
-        if 'AWS_PROFILE' in os.environ:
-            # Use the AWS_PROFILE environment variable
-            boto3.setup_default_session(profile_name=os.environ['AWS_PROFILE'])
-        elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ:
-            # Use AWS Access Key ID and Secret Access Key from environment variables
-            return boto3.client(
-                's3',
-                aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-                aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
-            )
-        else:
-            raise NoCredentialsError("AWS credentials not found. Please set up the AWS_PROFILE environment variable or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
+        # if 'AWS_PROFILE' in os.environ:
+        #     # Use the AWS_PROFILE environment variable
+        #     boto3.setup_default_session(profile_name=os.environ['AWS_PROFILE'])
+        # elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ:
+        #     # Use AWS Access Key ID and Secret Access Key from environment variables
+        #     return boto3.client(
+        #         's3',
+        #         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        #         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
+        #     )
+        # else:
+        #     raise NoCredentialsError("AWS credentials not found. Please set up the AWS_PROFILE environment variable or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
 
-        return boto3.client('s3')
+        return boto3.client('s3') 
+        # return boto3.resource('s3')
     
     def push(self, local_path: str, force: bool = False):
         if os.path.isdir(local_path):
@@ -57,7 +53,7 @@ class StorageObject:
                 local_file_path = os.path.join(root, file)
 
                 print("##################################################")
-                print(f"\nCALLBACK - Uploading {local_file_path}... \n")
+                print(f"\nCALLBACK - Uploading {local_file_path}...")
                 print(f"CALLBACK - Uploading {os.path.abspath(local_file_path)}... \n")
                 print("##################################################")
 
