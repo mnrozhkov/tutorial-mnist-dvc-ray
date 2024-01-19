@@ -56,26 +56,27 @@ def train_func_per_worker(config: Dict):
     # [3] Set up Live object for DVCLive
     # ===============================
     print("#############################################")
+    print("DVC_ENV_VARS")
     print(config.get("dvc_env", None))
+    print("#############################################")
     dvc_env = config.get("dvc_env", None)
     if dvc_env:
         for name, value in  dvc_env.items():
             os.environ[name] = value
-    print("#############################################")
+    
 
     live = None
     if worker_rank == 0:
-        # from dvclive import Live
+                
         from src.live import DVCLiveRayLogger as Live
         live = Live(
             dir='/tmp/dvclive',      
-            # dir='results/dvclive',  # leads to metric path in Ray’s session trial_dir
+            # dir='results/dvclive',  # metric path containts Ray’s session trial_dir
             # dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',
             dvcyaml=False, 
             save_dvc_exp=False, 
             bucket_name = "cse-cloud-version",
             s3_directory = "tutorial-mnist-dvc-ray/dvclive",
-            # trail_dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',   
         )
 
         print("#############################################")
@@ -169,7 +170,6 @@ def train(params: dict) -> None:
     # [2] Configure computation resources
     # =============================================
     scaling_config = ScalingConfig(num_workers=NUM_WORKERS, use_gpu=USE_GPU)
-    # sync_config = ray.train.SyncConfig(sync_artifacts=True)
 
     # [3] Initialize a Ray TorchTrainer
     # =============================================
@@ -181,8 +181,6 @@ def train(params: dict) -> None:
         run_config=RunConfig(
             name="MNIST",
             local_dir=RAY_RESULTS_DIR,
-            # storage_path=RAY_RESULTS_DIR,
-            # sync_config=sync_config
             log_to_file=True,
             # callbacks=[
             #     DVCLiveLoggerCallback(
@@ -253,5 +251,5 @@ if __name__ == "__main__":
     # [4] Stop DVCLive sync runner
     dvclive_sync_runner.stop()
 
-    # [5] Finally pull the latest version of DVCLive logs
+    # [5] Finally, pull the latest version of DVCLive logs
     dvclive_sync_runner.pull_from_storage(storage, "results/dvclive")
