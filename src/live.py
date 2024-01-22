@@ -22,21 +22,8 @@ class StorageObject:
         if 'AWS_PROFILE' in os.environ:
             print("StorageObject - Use the AWS_PROFILE environment variable")
             boto3.setup_default_session(profile_name=os.environ['AWS_PROFILE'])
-            return boto3.client('s3') 
-        
-        # elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ and 'AWS_SESSION_TOKEN' in os.environ:
-        #     # Use AWS Access Key ID and Secret Access Key from environment variables
-        #     return boto3.client(
-        #         's3',
-        #         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-        #         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
-        #         aws_session_token=os.environ['AWS_SESSION_TOKEN']
-        #     )
-        # else:
-        #     raise NoCredentialsError("AWS credentials not found. Please set up the AWS_PROFILE environment variable or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
 
         return boto3.client('s3') 
-        # return boto3.resource('s3')
     
     def push(self, local_path: str, force: bool = False):
         if os.path.isdir(local_path):
@@ -142,6 +129,6 @@ class DVCLiveS3SyncRunner(SyncRunner):
         super().__init__(interval, self.pull_from_storage, storage, local_path)
 
     def pull_from_storage(self, storage, local_path):
-        print("Pulling from storage...")
+        print("Pulling from storagdvc config --global studio.token isat_2BlrAu0aileSHrKtTPZQdbB6tGd8ZsPkeDnXrtxXW2echMBI4e...")
         storage.pull(local_path)
         print("Pull complete.")

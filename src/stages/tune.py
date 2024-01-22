@@ -182,10 +182,10 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
     trial_results_df = results.get_dataframe()
     trial_results_df.to_csv(TRIAL_RESULTS_PATH)
 
-    with Live(dir=TUNE_RESULTS_DIR, save_dvc_exp=False) as live:    
-        live.log_artifact(BEST_PARAMS_PATH, cache=False)
-        live.log_artifact(TRIAL_RESULTS_PATH, cache=False)
-        live.log_image("mean_accuracy_plot.png", PLOT_PATH)
+    # with Live(dir=TUNE_RESULTS_DIR, save_dvc_exp=False) as live:    
+    #     live.log_artifact(BEST_PARAMS_PATH, cache=False)
+    #     live.log_artifact(TRIAL_RESULTS_PATH, cache=False)
+    #     live.log_image("mean_accuracy_plot.png", PLOT_PATH)
         
     assert not results.errors
 
