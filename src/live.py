@@ -7,8 +7,6 @@ import threading
 from dvclive import Live
 
 class StorageObject:
-    """A class for interacting with S3 storage"""
-
     def __init__(self, bucket_name: str, s3_directory: str):
         self.bucket_name = bucket_name
         self.s3_directory = s3_directory.rstrip("/") + "/"  # Ensure the directory ends with a '/'
@@ -22,21 +20,23 @@ class StorageObject:
 
     def _create_s3_client(self):
         if 'AWS_PROFILE' in os.environ:
-            # Use the AWS_PROFILE environment variable
+            print("StorageObject - Use the AWS_PROFILE environment variable")
             boto3.setup_default_session(profile_name=os.environ['AWS_PROFILE'])
-            
-        # elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ:
+            return boto3.client('s3') 
+        
+        # elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ and 'AWS_SESSION_TOKEN' in os.environ:
         #     # Use AWS Access Key ID and Secret Access Key from environment variables
         #     return boto3.client(
         #         's3',
-        #         aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID', None),
-        #         aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY', None),
-        #         aws_session_token=os.environ.get('AWS_SESSION_TOKEN', None),
+        #         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
+        #         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY'],
+        #         aws_session_token=os.environ['AWS_SESSION_TOKEN']
         #     )
         # else:
         #     raise NoCredentialsError("AWS credentials not found. Please set up the AWS_PROFILE environment variable or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
 
         return boto3.client('s3') 
+        # return boto3.resource('s3')
     
     def push(self, local_path: str, force: bool = False):
         if os.path.isdir(local_path):
@@ -54,12 +54,6 @@ class StorageObject:
         for root, dirs, files in os.walk(directory_path):
             for file in files:
                 local_file_path = os.path.join(root, file)
-
-                # print("##################################################")
-                # print(f"\nCALLBACK - Uploading {local_file_path}...")
-                # print(f"CALLBACK - Uploading {os.path.abspath(local_file_path)}... \n")
-                # print("##################################################")
-
                 relative_path = os.path.relpath(local_file_path, directory_path)
                 s3_path = self.s3_directory + relative_path.replace("\\", "/")  # Replace backslash with forward slash for S3
                 self.s3.upload_file(local_file_path, self.bucket_name, s3_path)
@@ -74,7 +68,6 @@ class StorageObject:
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
                 self.s3.download_file(self.bucket_name, obj['Key'], local_file_path)
 
-
 class DVCLiveRayLogger(Live):
     def __init__(self, bucket_name, s3_directory, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -88,13 +81,36 @@ class DVCLiveRayLogger(Live):
 
     def next_step(self, *args, **kwargs):
         super().next_step(*args, **kwargs)
-        # print("\nDVCLiveLogger: PUSH METRICS")
+        print("\nDVCLiveLogger: PUSH METRICS")
         storage = self._get_storage()
         storage.push(self.dir, force=True)
 
 
+class DVCLiveLoggerCallback(Callback):
+    def __init__(self, dir: str, bucket_name: str, s3_directory: str, **kwargs):
+        super().__init__(**kwargs)
+        self.dir = dir
+        self.bucket_name = bucket_name
+        self.s3_directory = s3_directory
+        self.counter = 0
+
+    def _get_storage(self):
+        # Create a new StorageObject instance when needed
+        return StorageObject(self.bucket_name, self.s3_directory)
+
+    def on_checkpoint(self, **info) -> None:
+        # Push the directory where checkpoints are saved
+        print("\nDVCLiveLoggerCallback: PUSH METRICS (on_checkpoint)")
+        print(info)
+        storage = self._get_storage()
+        storage.push(self.dir, force=True)
+
+        # DEV: control number of calls
+        print(f"COUNTER: {self.counter}\n")
+        self.counter += 1
+
+
 class SyncRunner:
-    """A class for running a dunction periodically"""
     def __init__(self, interval, function, *args, **kwargs):
         self.interval = interval
         self.function = function
@@ -121,41 +137,11 @@ class SyncRunner:
             self.function(*self.args, **self.kwargs)
             time.sleep(self.interval)
 
-
 class DVCLiveS3SyncRunner(SyncRunner):
-    def __init__(self, storage: StorageObject, local_path, interval=3):
-        super().__init__(interval, self.pull_from_storage)
-        self.storage: StorageObject = storage
-        self.local_path = local_path
-        self.interval = interval
+    def __init__(self, storage, local_path, interval=3):
+        super().__init__(interval, self.pull_from_storage, storage, local_path)
 
-    def pull_from_storage(self):
+    def pull_from_storage(self, storage, local_path):
         print("Pulling from storage...")
-        self.storage.pull(self.local_path)
+        storage.pull(local_path)
         print("Pull complete.")
-
-
-# TODO: test with ray tune, find best scenarios for using this callback
-class DVCLiveLoggerCallback(Callback):
-    """A callback for pushing metrics to S3 storage"""
-    def __init__(self, dir: str, bucket_name: str, s3_directory: str, **kwargs):
-        super().__init__(**kwargs)
-        self.dir = dir
-        self.bucket_name = bucket_name
-        self.s3_directory = s3_directory
-        self.counter = 0
-
-    def _get_storage(self):
-        # Create a new StorageObject instance when needed
-        return StorageObject(self.bucket_name, self.s3_directory)
-
-    def on_checkpoint(self, **info) -> None:
-        # Push the directory where checkpoints are saved
-        # print("\nDVCLiveLoggerCallback: PUSH METRICS (on_checkpoint)")
-        # print(info)
-        storage = self._get_storage()
-        storage.push(self.dir, force=True)
-
-        # DEV: control number of calls
-        # print(f"COUNTER: {self.counter}\n")
-        self.counter += 1

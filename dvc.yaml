@@ -10,7 +10,6 @@ stages:
     - ${tune.results_dir}/best_params.yaml:
         cache: false
         # persist: true
-    - results/dvclive
 
   train:
     cmd: python src/stages/train.py --config params.yaml
@@ -24,7 +23,6 @@ stages:
 
 metrics:
 - results/dvclive/metrics.json
-
 plots:
 - training_iteration vs accuracy:
     template: linear
