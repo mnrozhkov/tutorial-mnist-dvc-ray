@@ -5,6 +5,7 @@ results/ray
 results/MNIST 
 results/ray_results
 notebooks
+tutorial-mnist-dvc-ray.zip
 
 
 # Byte-compiled / optimized / DLL files
