@@ -23,7 +23,6 @@ from torch import nn
 
 from src.helpers import get_dataloaders
 from src.model import ConvNet
-from src.live import DVCLiveLoggerCallback, DVCLiveS3SyncRunner, StorageObject
 
 
 def train_func_per_worker(config: Dict):
@@ -68,15 +67,10 @@ def train_func_per_worker(config: Dict):
     live = None
     if worker_rank == 0:
                 
-        from src.live import DVCLiveRayLogger as Live
+        from dvclive import Live
         live = Live(
-            dir='/tmp/dvclive',      
-            # dir='results/dvclive',  # metric path containts Ray’s session trial_dir
-            # dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',
+            dir=os.path.join(os.environ["DVC_ROOT"], "results/dvclive"),
             dvcyaml=False, 
-            save_dvc_exp=False, 
-            bucket_name = "cse-cloud-version",
-            s3_directory = "tutorial-mnist-dvc-ray/dvclive",
         )
 
         print("#############################################")
@@ -164,7 +158,8 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
-        "dvc_env": {name: value for name, value in os.environ.items() if name.startswith("DVC")}
+        "dvc_env": {name: value for name, value in os.environ.items() if
+                    name.startswith("DVC") and name != "DVC_STUDIO_TOKEN"}
     }
 
     # [2] Configure computation resources
@@ -182,13 +177,6 @@ def train(params: dict) -> None:
             name="MNIST",
             local_dir=RAY_RESULTS_DIR,
             log_to_file=True,
-            # callbacks=[
-            #     DVCLiveLoggerCallback(
-            #         dir = "/tmp/results/dvclive",
-            #         bucket_name = "cse-cloud-version",
-            #         s3_directory = "tutorial-mnist-dvc-ray/dvclive"
-            #     ),
-            # ]
         )
     )
 
@@ -235,21 +223,4 @@ if __name__ == "__main__":
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
 
-    # [1] Prepare StorageObject to sync DVCLive logs
-    # =============================================
-    bucket_name = "cse-cloud-version"
-    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
-    storage = StorageObject(bucket_name, s3_directory)
-    dvclive_sync_runner = DVCLiveS3SyncRunner(storage, "results/dvclive")
-
-    # [2] Start DVCLive sync runner
-    dvclive_sync_runner.start()
-
-    # [3] Start Training
     train(params)
-
-    # [4] Stop DVCLive sync runner
-    dvclive_sync_runner.stop()
-
-    # [5] Finally, pull the latest version of DVCLive logs
-    dvclive_sync_runner.pull_from_storage(storage, "results/dvclive")
