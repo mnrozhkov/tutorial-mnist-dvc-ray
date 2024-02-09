@@ -1,9 +1,6 @@
-# import asyncio
 import boto3
 import os
 from pathlib import Path
-# from dvclive.lightning import DVCLiveLogger as _DVCLiveLogger
-# from dvclive.lightning import ModelCheckpoint, rank_zero_only
 from botocore.exceptions import NoCredentialsError
 from pyparsing import C
 from ray.tune import Callback
@@ -24,19 +21,6 @@ class StorageObject:
         return self._s3
 
     def _create_s3_client(self):
-        # if 'AWS_PROFILE' in os.environ:
-        #     # Use the AWS_PROFILE environment variable
-        #     boto3.setup_default_session(profile_name=os.environ['AWS_PROFILE'])
-        # elif 'AWS_ACCESS_KEY_ID' in os.environ and 'AWS_SECRET_ACCESS_KEY' in os.environ:
-        #     # Use AWS Access Key ID and Secret Access Key from environment variables
-        #     return boto3.client(
-        #         's3',
-        #         aws_access_key_id=os.environ['AWS_ACCESS_KEY_ID'],
-        #         aws_secret_access_key=os.environ['AWS_SECRET_ACCESS_KEY']
-        #     )
-        # else:
-        #     raise NoCredentialsError("AWS credentials not found. Please set up the AWS_PROFILE environment variable or AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY.")
-
         try:
             # Attempt to create an S3 client with default credential resolution
             s3_client = boto3.client('s3')
@@ -73,18 +57,40 @@ class StorageObject:
                 s3_path = self.s3_directory + relative_path.replace("\\", "/")  # Replace backslash with forward slash for S3
                 self.s3.upload_file(local_file_path, self.bucket_name, s3_path)
 
-    def pull(self, local_path: str):
-        # Implementation for downloading objects from S3 to the local file system
+    # def pull(self, local_path: str):
+    #     # Implementation for downloading objects from S3 to the local file system
+    #     paginator = self.s3.get_paginator('list_objects_v2')
+    #     for page in paginator.paginate(Bucket=self.bucket_name, Prefix=self.s3_directory):
+    #         print(page)
+    #         for obj in page.get('Contents', []):
+    #             # Construct the local file path
+    #             local_file_path = os.path.join(local_path, os.path.relpath(obj['Key'], self.s3_directory))
+    #             os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+    #             self.s3.download_file(self.bucket_name, obj['Key'], local_file_path)
+    #             print("##################################################")
+    #             print(f"\nFile Downloaded from S3 {local_file_path}... \n")
+    #             print("##################################################")
+    def pull(self, filename: str):
+
         paginator = self.s3.get_paginator('list_objects_v2')
-        for page in paginator.paginate(Bucket=self.bucket_name, Prefix=self.s3_directory):
+        pages = paginator.paginate(Bucket=self.bucket_name, Prefix=self.s3_directory)
+
+        for page in pages:
             for obj in page.get('Contents', []):
-                # Construct the local file path
-                local_file_path = os.path.join(local_path, os.path.relpath(obj['Key'], self.s3_directory))
+                s3_file_key = obj['Key']
+                local_file_path = os.path.join(os.path.relpath(s3_file_key, self.s3_directory), filename)
+                print(local_file_path)
+
+                # # Check if filename is explicitly a file
+                # if os.path.splitext(filename)[1]:  # has a file extension
+                #     local_file_path = filename  # Override to direct file path
+
+                # Ensure the directory exists
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-                self.s3.download_file(self.bucket_name, obj['Key'], local_file_path)
-                print("##################################################")
-                print(f"\nFile Downloaded from S3 {local_file_path}... \n")
-                print("##################################################")
+
+                # Download the file
+                self.s3.download_file(self.bucket_name, s3_file_key, local_file_path)
+                print(f"File downloaded from S3 to {local_file_path}")
 
 class DVCLiveRayLogger(Live):
     def __init__(self, bucket_name, s3_directory, *args, **kwargs):
@@ -163,3 +169,69 @@ class DVCLiveS3SyncRunner(S3SyncRunner):
         print("Pulling from storage...")
         storage.pull(local_path)
         print("Pull complete.")
+
+
+def download_folder_from_s3(bucket_name, s3_folder, local_dir_path):
+    
+    s3 = boto3.client('s3')
+    paginator = s3.get_paginator('list_objects_v2')
+
+    # Ensure the folder_prefix ends with a slash
+    if not s3_folder.endswith('/'):
+        s3_folder += '/'
+
+    print(f"Listing objects in folder '{s3_folder}' of bucket '{bucket_name}':")
+    
+    for page in paginator.paginate(Bucket=bucket_name, Prefix=s3_folder):
+        for obj in page.get('Contents', []):
+
+            key = os.path.relpath(obj['Key'], s3_folder)
+            
+            if key != '.':
+            
+                # Define the local path to save the file
+                local_file_path = os.path.join(local_dir_path, key)
+    
+                # Ensure that the directory for this file exists (this creates any necessary subdirectories)
+                os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
+                
+                # Download the file from S3
+                s3.download_file(bucket_name, obj['Key'], local_file_path)
+                print(f"Downloaded {obj['Key']} to {local_file_path}")
+
+
+def download_file_from_s3(bucket_name, s3_file_key, local_file_path):
+    s3 = boto3.client('s3')
+    s3.download_file(bucket_name, s3_file_key, local_file_path)
+    print(f"Downloaded {s3_file_key} to {local_file_path}")
+
+def list_objects_in_s3_folder(bucket_name, folder_prefix):
+    """
+    List all objects in a specific folder of an S3 bucket.
+
+    Parameters:
+    - bucket_name (str): The name of the S3 bucket.
+    - folder_prefix (str): The folder prefix within the S3 bucket.
+    """
+    s3_client = boto3.client('s3')
+    paginator = s3_client.get_paginator('list_objects_v2')
+
+    # Ensure the folder_prefix ends with a slash
+    if not folder_prefix.endswith('/'):
+        folder_prefix += '/'
+
+    print(f"Listing objects in folder '{folder_prefix}' of bucket '{bucket_name}':")
+
+    # Use the paginator to handle buckets with many objects
+    operation_parameters = {'Bucket': bucket_name, 'Prefix': folder_prefix}
+    page_iterator = paginator.paginate(**operation_parameters)
+
+    obj_keys = []
+    for page in page_iterator:
+        for obj in page.get('Contents', []):
+            # print(obj['Key'])
+            key = os.path.relpath(obj['Key'], folder_prefix)
+            if key != '.':
+                obj_keys.append(key)
+    
+    return obj_keys

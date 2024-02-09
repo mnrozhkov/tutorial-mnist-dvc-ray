@@ -22,7 +22,7 @@ from torch import nn
 
 from src.helpers import get_dataloaders
 from src.model import ConvNet
-from src.live import DVCLiveLoggerCallback, DVCLiveS3SyncRunner, StorageObject
+from src.live import download_file_from_s3, download_folder_from_s3, list_objects_in_s3_folder
 
 
 def train_func_per_worker(config: Dict):
@@ -56,25 +56,25 @@ def train_func_per_worker(config: Dict):
     # ===============================
     print("#############################################")
     print("DVC_ENV_VARS - get from config.yaml")
-    print(os.environ)
+    # print(os.environ)
     print(config.get("dvc_env", None))
     print("#############################################")
     dvc_env = config.get("dvc_env", None)
     if dvc_env:
         for name, value in  dvc_env.items():
             os.environ[name] = value
-    
 
     live = None
     if worker_rank == 0:
                 
         from src.live import DVCLiveRayLogger as Live
+        # from dvclive import Live
         live = Live(
-            dir=os.path.join(os.environ.get("DVC_ROOT", ""), "results/dvclive"),
+            # dir=os.path.join(os.environ.get("DVC_ROOT", ""), "results/dvclive"),
+            dir=os.path.join("", "results/dvclive"),
             dvcyaml=False, 
             bucket_name = "cse-cloud-version",
-            s3_directory = "tutorial-mnist-dvc-ray/dvclive",
-            # trail_dir=f'{ray.train.get_context().get_trial_dir()}/dvclive',   
+            s3_directory = "tutorial-mnist-dvc-ray/dvclive",  
         )
 
         print("#############################################")
@@ -130,8 +130,8 @@ def train_func_per_worker(config: Dict):
             if live:
                 print("-------------------")
                 print(f"LOG METRICS WITH DVCLIVE")
-                print("worker local rank - ", ray.train.get_context().get_local_rank())
                 print("worker global rank - ", ray.train.get_context().get_world_rank())
+                print("worker local rank - ", ray.train.get_context().get_local_rank())
                 print("node rank - ", ray.train.get_context().get_node_rank())
                 print("epoch - ", epoch)
                 print("loss - ", test_loss)
@@ -140,7 +140,7 @@ def train_func_per_worker(config: Dict):
                 live.log_metric("loss", test_loss)
                 live.log_metric("accuracy", accuracy)
                 live.next_step()
-                live.log_artifact(checkpoint_path, "model.pth", copy=True)
+            
 
 
 def train(params: dict) -> None:
@@ -176,7 +176,7 @@ def train(params: dict) -> None:
     # [3] Runtime configuration for training and tuning runs.
     # =============================================
     run_config = RunConfig(
-            name="MNIST",
+            name="MNIST-DVC-RAY-CLOUD",
 
             # Using cloud storage for a multi-node cluster
             storage_path="s3://cse-cloud-version/tutorial-mnist-dvc-ray/ray_shared_storage/",
@@ -188,7 +188,6 @@ def train(params: dict) -> None:
 
     # [3] Initialize a Ray TorchTrainer
     # =============================================
-    RAY_RESULTS_DIR = str(Path("results/ray_results").resolve())
     trainer = TorchTrainer(
         train_loop_per_worker=train_func_per_worker,
         train_loop_config=train_config,
@@ -210,16 +209,16 @@ def train(params: dict) -> None:
         print(f"result.checkpoint.path: {result.checkpoint.path}")
     
     # Save Trial Results
-    train_metrics_df = result.metrics_dataframe
-    TRAIN_METRICS_PATH = "results/train/train_metrics.csv"
-    train_metrics_df.to_csv(TRAIN_METRICS_PATH)
-    train_report = {
-        'config': result.config,
-        'path': result.path,
-        'metrics': result.metrics,
-    }
-    with open('report.json', 'w') as f:
-        json.dump(train_report, f)
+    # train_metrics_df = result.metrics_dataframe
+    # TRAIN_METRICS_PATH = "results/train/train_metrics.csv"
+    # train_metrics_df.to_csv(TRAIN_METRICS_PATH)
+    # train_report = {
+    #     'config': result.config,
+    #     'path': result.path,
+    #     'metrics': result.metrics,
+    # }
+    # with open('report.json', 'w') as f:
+    #     json.dump(train_report, f)
     
     # TODO: Pull results from S3 or /results/ray_results
     # DVCLIVE_PATH_SOURCE = Path(train_report.get('path'))
@@ -231,14 +230,31 @@ def train(params: dict) -> None:
     #     )
     # return result
     # =============================================
-    bucket_name = "cse-cloud-version"
-    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
-    storage = StorageObject(bucket_name, s3_directory)
-    storage.pull("results/dvclive")
+    # bucket_name = "cse-cloud-version"
+    # s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+    # storage = StorageObject(bucket_name, s3_directory)
+    # storage.pull("results/dvclive")
 
     s3_path_parts = result.path.split("/", 1)
-    storage = StorageObject(s3_path_parts[0], s3_path_parts[1])
-    storage.pull("results/train")
+    bucket_name = s3_path_parts[0]
+    results_s3_directory = s3_path_parts[1]
+    # storage = StorageObject(s3_path_parts[0], s3_path_parts[1])
+    
+    obj_keys = list_objects_in_s3_folder(bucket_name, results_s3_directory)
+    print("\nObjects in Trial S3 folder: ", obj_keys)
+
+    for filename in ['params.json', 'model.pth', 'result.json']:
+        try:
+            object_key = os.path.join(results_s3_directory, filename)
+            file_path = os.path.join(TRAIN_RESULTS_DIR, filename)
+            download_file_from_s3(bucket_name, object_key, file_path)
+            print(f"Downloaded {filename} from S3")
+        except Exception as e:
+            print(f"Error downloading {filename} from S3: {e}")
+
+    # [5] Pull DVCLive logs from S3
+    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+    download_folder_from_s3(bucket_name, s3_directory, 'results/dvclive/')
     
 
 if __name__ == "__main__":
@@ -252,9 +268,9 @@ if __name__ == "__main__":
 
     # [1] Prepare StorageObject to sync DVCLive logs
     # =============================================
-    bucket_name = "cse-cloud-version"
-    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
-    storage = StorageObject(bucket_name, s3_directory)
+    # bucket_name = "cse-cloud-version"
+    # s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+    # storage = StorageObject(bucket_name, s3_directory)
     # dvclive_sync_runner = DVCLiveS3SyncRunner(storage, "results/dvclive")
 
     # [2] Start DVCLive sync runner
@@ -265,4 +281,5 @@ if __name__ == "__main__":
 
     # [4] Stop DVCLive sync runner
     # dvclive_sync_runner.stop()
-    storage.pull("results/dvclive")
+
+

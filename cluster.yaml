@@ -176,15 +176,11 @@ setup_commands:
     # Note: if you're developing Ray, you probably want to create a Docker image that
     # has your Ray repo pre-cloned. Then, you can replace the pip installs
     # below with a git checkout <your_sha> (and possibly a recompile).
-    # To run the nightly version of ray (as opposed to the latest), either use a rayproject docker image
-    # that has the "nightly" (e.g. "rayproject/ray-ml:nightly-gpu") or uncomment the following line:
-    # - pip install -U "ray[default] @ https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-3.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl"
-    # - pip install -U ray[default] transformers[torch] datasets scipy scikit-learn torch dvc[s3] dvclive
     - pip install -U ray[default] 
     - pip install dvc[s3]==3.43.1 dvclive==3.41.1
     - pip install -U pyOpenSSL==24.0.0
     - export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray:$PATH
-    
+     
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []

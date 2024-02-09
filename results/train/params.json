@@ -1,0 +1,15 @@
+{
+  "train_loop_config": {
+    "batch_size_per_worker": 16,
+    "dvc_env": {
+      "DVC_EXP_BASELINE_REV": "bb4ad930d9a5302dcc57590750d385aac939a243",
+      "DVC_EXP_NAME": "randy-lush",
+      "DVC_ROOT": "/Users/mikhailrozhkov/dev/rnd/ray/tutorial-mnist-dvc-ray",
+      "DVC_STUDIO_REPO_URL": "git@github.com:mnrozhkov/tutorial-mnist-dvc-ray.git",
+      "DVC_STUDIO_URL": "https://studio.iterative.ai"
+    },
+    "epochs": 5,
+    "lr": 0.0074397194172281704,
+    "momentum": 0.7767111509248744
+  }
+}
