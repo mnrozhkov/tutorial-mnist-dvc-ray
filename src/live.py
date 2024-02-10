@@ -57,19 +57,6 @@ class StorageObject:
                 s3_path = self.s3_directory + relative_path.replace("\\", "/")  # Replace backslash with forward slash for S3
                 self.s3.upload_file(local_file_path, self.bucket_name, s3_path)
 
-    # def pull(self, local_path: str):
-    #     # Implementation for downloading objects from S3 to the local file system
-    #     paginator = self.s3.get_paginator('list_objects_v2')
-    #     for page in paginator.paginate(Bucket=self.bucket_name, Prefix=self.s3_directory):
-    #         print(page)
-    #         for obj in page.get('Contents', []):
-    #             # Construct the local file path
-    #             local_file_path = os.path.join(local_path, os.path.relpath(obj['Key'], self.s3_directory))
-    #             os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
-    #             self.s3.download_file(self.bucket_name, obj['Key'], local_file_path)
-    #             print("##################################################")
-    #             print(f"\nFile Downloaded from S3 {local_file_path}... \n")
-    #             print("##################################################")
     def pull(self, filename: str):
 
         paginator = self.s3.get_paginator('list_objects_v2')
@@ -80,10 +67,6 @@ class StorageObject:
                 s3_file_key = obj['Key']
                 local_file_path = os.path.join(os.path.relpath(s3_file_key, self.s3_directory), filename)
                 print(local_file_path)
-
-                # # Check if filename is explicitly a file
-                # if os.path.splitext(filename)[1]:  # has a file extension
-                #     local_file_path = filename  # Override to direct file path
 
                 # Ensure the directory exists
                 os.makedirs(os.path.dirname(local_file_path), exist_ok=True)
@@ -97,78 +80,19 @@ class DVCLiveRayLogger(Live):
         super().__init__(*args, **kwargs)
         self.bucket_name = bucket_name
         self.s3_directory = s3_directory
-        # self.trial_dir = trial_dir
+        self.storage = self._get_storage()
 
     def _get_storage(self):
         # Create a new StorageObject instance when needed
         return StorageObject(self.bucket_name, self.s3_directory)
 
     def next_step(self, *args, **kwargs):
-        super().next_step(*args, **kwargs)
+        
         print("\nDVCLiveLogger: PUSH METRICS")
-        storage = self._get_storage()
-        storage.push(self.dir, force=True)
+        # storage = self._get_storage()
+        self.storage.push(self.dir, force=True)
 
-
-class DVCLiveLoggerCallback(Callback):
-    def __init__(self, dir: str, bucket_name: str, s3_directory: str, **kwargs):
-        super().__init__(**kwargs)
-        self.dir = dir
-        self.bucket_name = bucket_name
-        self.s3_directory = s3_directory
-        self.counter = 0
-
-    def _get_storage(self):
-        # Create a new StorageObject instance when needed
-        return StorageObject(self.bucket_name, self.s3_directory)
-
-    def on_checkpoint(self, **info) -> None:
-        # Push the directory where checkpoints are saved
-        print("\nDVCLiveLoggerCallback: PUSH METRICS (on_checkpoint)")
-        print(info)
-        storage = self._get_storage()
-        storage.push(self.dir, force=True)
-
-        # DEV: control number of calls
-        print(f"COUNTER: {self.counter}\n")
-        self.counter += 1
-
-
-class S3SyncRunner:
-    def __init__(self, interval, function, *args, **kwargs):
-        self.interval = interval
-        self.function = function
-        self.args = args
-        self.kwargs = kwargs
-        self.thread = None
-        self.running = False
-
-    def start(self):
-        if self.running:
-            print("Runner is already running.")
-            return
-        self.running = True
-        self.thread = threading.Thread(target=self.run_periodically, daemon=True)
-        self.thread.start()
-
-    def stop(self):
-        self.running = False
-        if self.thread:
-            self.thread.join()
-
-    def run_periodically(self):
-        while self.running:
-            self.function(*self.args, **self.kwargs)
-            time.sleep(self.interval)
-
-class DVCLiveS3SyncRunner(S3SyncRunner):
-    def __init__(self, storage, local_path, interval=3):
-        super().__init__(interval, self.pull_from_storage, storage, local_path)
-
-    def pull_from_storage(self, storage, local_path):
-        print("Pulling from storage...")
-        storage.pull(local_path)
-        print("Pull complete.")
+        super().next_step(*args, **kwargs)
 
 
 def download_folder_from_s3(bucket_name, s3_folder, local_dir_path):
@@ -205,6 +129,7 @@ def download_file_from_s3(bucket_name, s3_file_key, local_file_path):
     s3.download_file(bucket_name, s3_file_key, local_file_path)
     print(f"Downloaded {s3_file_key} to {local_file_path}")
 
+
 def list_objects_in_s3_folder(bucket_name, folder_prefix):
     """
     List all objects in a specific folder of an S3 bucket.
@@ -229,7 +154,7 @@ def list_objects_in_s3_folder(bucket_name, folder_prefix):
     obj_keys = []
     for page in page_iterator:
         for obj in page.get('Contents', []):
-            # print(obj['Key'])
+            
             key = os.path.relpath(obj['Key'], folder_prefix)
             if key != '.':
                 obj_keys.append(key)

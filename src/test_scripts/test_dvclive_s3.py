@@ -1,10 +1,12 @@
-import time
+import os
 import random
+import time
 
 from src.live import DVCLiveRayLogger as Live
 
 with Live(
-    dir='/tmp/dvclive',      
+    # dir='/tmp/dvclive',      
+    dir=os.path.join(os.environ.get("DVC_ROOT", ""), "results/dvclive"),
     dvcyaml=False, 
     save_dvc_exp=True, 
     bucket_name = "cse-cloud-version",

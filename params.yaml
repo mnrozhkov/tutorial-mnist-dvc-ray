@@ -9,4 +9,4 @@ train:
   use_gpu: False
   num_workers: 2
   global_batch_size: 32
-  epoch_size: 5 
+  epoch_size: 3
