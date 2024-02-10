@@ -2,4 +2,4 @@
     remote = s3remote_va
 ['remote "s3remote_va"']
     url = s3://cse-cloud-version/tutorial-mnist-dvc-ray/
-    version_aware = true
+    version_aware = false
