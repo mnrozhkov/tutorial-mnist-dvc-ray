@@ -2,8 +2,6 @@ stages:
 
   tune:
     cmd: python src/stages/tune.py --config params.yaml
-    # - ray job submit --working-dir . -- python src/stages/tune.py --config params.yaml
-    # - ray rsync_down cluster.yaml '/home/ray/tutorial-mnist-dvc-ray/${tune.results_dir}/' ./${tune.results_dir}
     params:
     - tune
     outs:
@@ -13,7 +11,6 @@ stages:
 
   train:
     cmd: python src/stages/train.py --config params.yaml
-    # cmd: ray job submit --working-dir $PWD -- python src/stages/train.py --config params.yaml
     params:
     - train
     deps:
@@ -21,12 +18,14 @@ stages:
     outs:
     - ${train.results_dir}/model.pth
 
+metrics:
+- results/dvclive/metrics.json
 plots:
 - training_iteration vs accuracy:
     template: linear
     x: training_iteration
     y:
       results/train/train_metrics.csv: accuracy
-
-
+- results/dvclive/plots/metrics:
+    x: step
 - results/tune/plots/images

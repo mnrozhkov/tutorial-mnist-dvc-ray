@@ -3,8 +3,6 @@ Source: https://docs.ray.io/en/latest/ray-overview/getting-started.html
 """
 
 import argparse
-import json
-import shutil
 import os
 from pathlib import Path
 from typing import Dict
@@ -12,21 +10,23 @@ from tqdm import tqdm
 import yaml
 
 import ray
-from ray.train import ScalingConfig, RunConfig
+from ray.train import ScalingConfig, RunConfig, SyncConfig
 from ray.train.torch import TorchTrainer
 from ray.train import Checkpoint
-from ray.train import get_context
 import torch
 from torch import nn
 
 from src.helpers import get_dataloaders
 from src.model import ConvNet
+from src.live import download_file_from_s3, download_folder_from_s3, list_objects_in_s3_folder
 
 
 def train_func_per_worker(config: Dict):
+        
     lr = config["lr"]
     epochs = config["epochs"]
     batch_size = config["batch_size_per_worker"]
+    worker_rank = ray.train.get_context().get_world_rank()
 
     # Get dataloaders inside worker training function
     train_dataloader, test_dataloader = get_dataloaders(batch_size=batch_size)
@@ -37,7 +37,6 @@ def train_func_per_worker(config: Dict):
     train_dataloader = ray.train.torch.prepare_data_loader(train_dataloader)
     test_dataloader = ray.train.torch.prepare_data_loader(test_dataloader)
 
-
     # [2] Prepare and wrap your model with DistributedDataParallel
     # Move the model the correct GPU/CPU device
     # ============================================================
@@ -47,8 +46,39 @@ def train_func_per_worker(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
-    train_context = get_context()
-    rank = train_context.get_local_rank()
+    # [3] Set up Live object for DVCLive
+    # ===============================
+    print("#############################################")
+    print("DVC_ENV_VARS - get from config.yaml")
+    print(config.get("dvc_env", None))
+    print("#############################################")
+    dvc_env = config.get("dvc_env", None)
+    if dvc_env:
+        for name, value in  dvc_env.items():
+            os.environ[name] = value
+
+    live = None
+    if worker_rank == 0:
+                
+        from src.live import DVCLiveRayLogger as Live
+        live = Live(
+            # dir=os.path.join(os.environ.get("DVC_ROOT", ""), "results/dvclive"),
+            dir="results/dvclive",
+            save_dvc_exp=True, 
+            bucket_name = "cse-cloud-version",
+            s3_directory = "tutorial-mnist-dvc-ray/dvclive",  
+        )
+
+        print("#############################################")
+        print("RAY_TRAIN_CONTEXT")
+        print(ray.train.get_context().get_experiment_name())
+        print(ray.train.get_context().get_metadata())
+        print(ray.train.get_context().get_storage())
+        print("TRIAL_DIR", ray.train.get_context().get_trial_dir())
+        print("TRIAL_NAME", ray.train.get_context().get_trial_name())
+        print("Live.dir", live.dir)
+        print("Live.params_file", live.params_file)
+        print("#############################################")
 
     for epoch in range(epochs):
 
@@ -75,7 +105,7 @@ def train_func_per_worker(config: Dict):
         test_loss /= len(test_dataloader)
         accuracy = num_correct / num_total
 
-        # [3] Report metrics to Ray Train
+        # [4] Report metrics to Ray Train
         # ===============================
         checkpoint_dir = "."
         checkpoint_path = checkpoint_dir + "/model.pth"
@@ -86,11 +116,22 @@ def train_func_per_worker(config: Dict):
             checkpoint=Checkpoint.from_directory(checkpoint_dir)
         )
 
-        # Log metrics with print() 
-        if rank == 0:
-            print("loss", test_loss)
-            print("accuracy", accuracy)
-            print("---NEXT STEP---")
+        # [5] Log metrics with DVCLive 
+        # ===============================
+        if live:
+            print("-------------------")
+            print(f"LOG METRICS WITH DVCLIVE")
+            print("worker global rank - ", ray.train.get_context().get_world_rank())
+            print("worker local rank - ", ray.train.get_context().get_local_rank())
+            print("node rank - ", ray.train.get_context().get_node_rank())
+            print("epoch - ", epoch)
+            print("loss - ", test_loss)
+            print("accuracy - ", accuracy)
+            print("-------------------")
+            live.log_metric("loss", test_loss)
+            live.log_metric("accuracy", accuracy)
+            live.next_step()
+            
 
 
 def train(params: dict) -> None:
@@ -113,26 +154,36 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
+        
+        # Propogate DVC environment variables from Head Node to Workers 
+        "dvc_env": {
+            name: value for name, value in os.environ.items() if name.startswith("DVC")
+        }
     }
 
     # [2] Configure computation resources
     # =============================================
     scaling_config = ScalingConfig(num_workers=NUM_WORKERS, use_gpu=USE_GPU)
-    # sync_config = ray.train.SyncConfig(sync_artifacts=True)
+
+    # [3] Runtime configuration for training and tuning runs.
+    # Using cloud storage for a multi-node cluster
+    # =============================================
+    run_config = RunConfig(
+            name="ray-trials",
+            storage_path="s3://cse-cloud-version/tutorial-mnist-dvc-ray/",
+            sync_config=SyncConfig(
+                sync_artifacts=True, 
+                sync_artifacts_on_checkpoint=True
+            ),
+        )
 
     # [3] Initialize a Ray TorchTrainer
     # =============================================
-    RAY_RESULTS_DIR = str(Path("results/ray_results").resolve())
     trainer = TorchTrainer(
         train_loop_per_worker=train_func_per_worker,
         train_loop_config=train_config,
         scaling_config=scaling_config,
-        run_config=RunConfig(
-            name="MNIST",
-            local_dir=RAY_RESULTS_DIR,
-            # storage_path=RAY_RESULTS_DIR,
-            # sync_config=sync_config
-        )
+        run_config=run_config,
     )
 
     # [4] Start Distributed Training
@@ -145,40 +196,45 @@ def train(params: dict) -> None:
     print(f"result.metrics: {result.metrics}")
     print(f"result.metrics_dataframe: {result.metrics_dataframe}")
     print(f"result.config: {result.config}")
-    
     if result.checkpoint:
         print(f"result.checkpoint.path: {result.checkpoint.path}")
     
-    # Save Trial Results
-    train_metrics_df = result.metrics_dataframe
-    TRAIN_METRICS_PATH = "results/train/train_metrics.csv"
-    train_metrics_df.to_csv(TRAIN_METRICS_PATH)
-
-    train_report = {
-        'config': result.config,
-        'path': result.path,
-        'metrics': result.metrics,
-    }
-    with open('report.json', 'w') as f:
-        json.dump(train_report, f)
+    # [5] Save Trial Results
+    # Pull Ray Trial results from S3 shared storage ("ray-trials") 
+    # =============================================
+    s3_path_parts = result.path.split("/", 1)
+    bucket_name = s3_path_parts[0]
+    results_s3_directory = s3_path_parts[1]
     
-    DVCLIVE_PATH_SOURCE = Path(train_report.get('path'))
-    print(f"DVCLIVE_PATH_SOURCE: {DVCLIVE_PATH_SOURCE}")
-    for filename in ['result.json', 'model.pth']: 
-        shutil.copyfile(
-            DVCLIVE_PATH_SOURCE / filename, 
-            Path(TRAIN_RESULTS_DIR).resolve() / filename
-            )
+    obj_keys = list_objects_in_s3_folder(bucket_name, results_s3_directory)
+    print("\nObjects in Trial S3 folder: ", obj_keys)
+
+    for filename in ['model.pth']:
+        try:
+            object_key = os.path.join(results_s3_directory, filename)
+            file_path = os.path.join(TRAIN_RESULTS_DIR, filename)
+            download_file_from_s3(bucket_name, object_key, file_path)
+            print(f"Downloaded {filename} from S3")
+        except Exception as e:
+            print(f"Error downloading {filename} from S3: {e}")
+
+    # [6] Pull DVCLive logs from S3
+    # =============================================
+    s3_directory = "tutorial-mnist-dvc-ray/dvclive"
+    download_folder_from_s3(bucket_name, s3_directory, 'results/dvclive/')
+    
 
 if __name__ == "__main__":
-
-    # os.environ["RAY_AIR_LOCAL_CACHE_DIR"] = "results"
 
     parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
     parser.add_argument("--config", help="DVC parameters")
     args, _ = parser.parse_known_args()
-    
+
+    # [1] Load config
+    # =============================================
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
 
+    # [2] Start Training
+    # =============================================
     train(params)

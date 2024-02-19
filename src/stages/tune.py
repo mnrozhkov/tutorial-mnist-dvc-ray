@@ -156,7 +156,6 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
     )
     results:ResultGrid = tuner.fit()
 
-
     best_result: Result = results.get_best_result()
     best_params: Dict[str, Any] = best_result.config
     print("Tune - Best config is:", best_params)
@@ -204,4 +203,5 @@ if __name__ == "__main__":
 
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
+        
     tune_hyperparameters(params, args.cuda, args.smoke_test)

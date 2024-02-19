@@ -7,7 +7,7 @@
 #    - mkdir dvclive
 
 # An unique identifier for the head node and workers of this cluster.
-cluster_name: aws-example-full
+cluster_name: tutorial-mnist-dvc-ray
 
 # The maximum number of workers nodes to launch in addition to the head
 # node.
@@ -23,9 +23,10 @@ upscaling_speed: 1.0
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled.
 docker:
-    image: "rayproject/ray-ml:latest-cpu" 
+    # image: "rayproject/ray-ml:latest-py310-cpu" 
+    image: "rayproject/ray-ml@sha256:fa8c69ae055b92bf2f97e22c6a96ea835be60afa69c224d6e1275c3040833d0a" 
     # image: "rayproject/ray-ml:latest-gpu" # You can change this to latest-cpu if you don't need GPU support and want a faster startup
-    # image: rayproject/ray:latest-cpu   # use this one if you don't need ML dependencies, it's faster to pull
+    # image: rayproject/ray:latest-py310-cpu   # use this one if you don't need ML dependencies, it's faster to pull
     container_name: "ray_container"
     # If true, pulls latest version of image. Otherwise, `docker run` will only pull the image
     # if no cached version is present.
@@ -34,10 +35,12 @@ docker:
         - --ulimit nofile=65536:65536
 
     # Example of running a GPU head with CPU workers
-    # head_image: "rayproject/ray-ml:latest-gpu"
+    # head_image: "rayproject/ray:latest-py310-cpu"
     # Allow Ray to automatically detect GPUs
 
     # worker_image: "rayproject/ray-ml:latest-cpu"
+    # worker_image: "rayproject/ray-ml:latest-py310-cpu" 
+    # worker_image: "rayproject/ray-ml@sha256:fa8c69ae055b92bf2f97e22c6a96ea835be60afa69c224d6e1275c3040833d0a" 
     # worker_run_options: []
 
 # If a node is idle for this many minutes, it will be removed.
@@ -73,7 +76,7 @@ available_node_types:
         # You can also set custom resources.
         # For example, to mark a node type as having 1 CPU, 1 GPU, and 5 units of a resource called "custom", set
         # resources: {"CPU": 1, "GPU": 1, "custom": 5}
-        resources: {}
+        resources: {"CPU": 0}
         # Provider-specific config for this node type, e.g. instance type. By default
         # Ray will auto-configure unspecified fields such as SubnetId and KeyName.
         # For more documentation on available fields, see:
@@ -83,14 +86,14 @@ available_node_types:
             # Default AMI for us-west-2.
             # Check https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/aws/config.py
             # for default images for other zones.
-            ImageId: ami-0387d929287ab193e
+            # ImageId: ami-0387d929287ab193e
             # You can provision additional disk space with a conf as follows
-            # BlockDeviceMappings:
-            #     - DeviceName: /dev/sda1
-            #       Ebs:
-            #           VolumeSize: 140
-            #           VolumeType: gp3
-            # Additional options in the boto docs.
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 160
+                      VolumeType: gp3
+            
     ray.worker.default:
         # The minimum number of worker nodes of this type to launch.
         # This number should be >= 0.
@@ -113,17 +116,21 @@ available_node_types:
             # Default AMI for us-west-2.
             # Check https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/_private/aws/config.py
             # for default images for other zones.
-            ImageId: ami-0387d929287ab193e
+            # ImageId: ami-0387d929287ab193e
             # Run workers on spot by default. Comment this out to use on-demand.
             # NOTE: If relying on spot instances, it is best to specify multiple different instance
             # types to avoid interruption when one instance type is experiencing heightened demand.
             # Demand information can be found at https://aws.amazon.com/ec2/spot/instance-advisor/
-            # InstanceMarketOptions:
-            #     MarketType: spot
+            InstanceMarketOptions:
+                MarketType: spot
                 # Additional options can be found in the boto docs, e.g.
                 #   SpotOptions:
                 #       MaxPrice: MAX_HOURLY_PRICE
-            # Additional options in the boto docs.
+            BlockDeviceMappings:
+                - DeviceName: /dev/sda1
+                  Ebs:
+                      VolumeSize: 160
+                      VolumeType: gp3
 
 # Specify the node type of the head node (as configured above).
 head_node_type: ray.head.default
@@ -132,23 +139,27 @@ head_node_type: ray.head.default
 # dictionary from REMOTE_PATH: LOCAL_PATH, e.g.
 file_mounts: {
 #    "/path1/on/remote/machine": "/path1/on/local/machine",
-#    "/path2/on/remote/machine": "/path2/on/local/machine",
+    "/home/ray/tutorial-mnist-dvc-ray": ".",
+    "/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local": "./.dvc/config.local",
+    "/home/ray/.aws/credentials": "~/.aws/ray-credentials",
 }
 
 # Files or directories to copy from the head node to the worker nodes. The format is a
 # list of paths. The same path on the head node will be copied to the worker node.
 # This behavior is a subset of the file_mounts behavior. In the vast majority of cases
 # you should just use file_mounts. Only use this if you know what you're doing!
-cluster_synced_files: []
+cluster_synced_files: [
+    # "/home/ray/.aws/credentials"
+]
 
 # Whether changes to directories in file_mounts or cluster_synced_files in the head node
 # should sync to the worker node continuously
 file_mounts_sync_continuously: False
 
 # Patterns for files to exclude when running rsync up or rsync down
-rsync_exclude:
-    - "**/.git"
-    - "**/.git/**"
+rsync_exclude: []
+    # - "**/.git" # Commented out because we want to sync the .git directory
+    # - "**/.git/**"
 
 # Pattern files to use for filtering out files when running rsync up or rsync down. The file is searched for
 # in the source directory and recursively through all subdirectories. For example, if .gitignore is provided
@@ -166,11 +177,11 @@ setup_commands:
     # Note: if you're developing Ray, you probably want to create a Docker image that
     # has your Ray repo pre-cloned. Then, you can replace the pip installs
     # below with a git checkout <your_sha> (and possibly a recompile).
-    # To run the nightly version of ray (as opposed to the latest), either use a rayproject docker image
-    # that has the "nightly" (e.g. "rayproject/ray-ml:nightly-gpu") or uncomment the following line:
-    # - pip install -U "ray[default] @ https://s3-us-west-2.amazonaws.com/ray-wheels/latest/ray-3.0.0.dev0-cp37-cp37m-manylinux2014_x86_64.whl"
-    - pip install -U ray transformers[torch] datasets scipy scikit-learn torch dvclive
-    # - mkdir dvclive
+    - pip install -U ray[default] 
+    - pip install dvc[s3]==3.43.1 dvclive==3.41.1
+    - pip install -U pyOpenSSL==24.0.0
+    - export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray
+     
 
 # Custom commands that will be run on the head node after common setup.
 head_setup_commands: []

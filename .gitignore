@@ -4,7 +4,10 @@ results/ray
 .python-version
 results/MNIST 
 results/ray_results
+results/test_s3_storage
 notebooks
+tutorial-mnist-dvc-ray.zip
+
 
 
 # Byte-compiled / optimized / DLL files
