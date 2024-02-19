@@ -209,7 +209,7 @@ def train(params: dict) -> None:
     obj_keys = list_objects_in_s3_folder(bucket_name, results_s3_directory)
     print("\nObjects in Trial S3 folder: ", obj_keys)
 
-    for filename in ['params.json', 'model.pth', 'result.json']:
+    for filename in ['params.json', 'model.pth']:
         try:
             object_key = os.path.join(results_s3_directory, filename)
             file_path = os.path.join(TRAIN_RESULTS_DIR, filename)

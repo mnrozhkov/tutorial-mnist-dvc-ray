@@ -21,7 +21,6 @@ stages:
 metrics:
 - results/dvclive/metrics.json
 plots:
-- results/tune/plots/images
 - training_iteration vs accuracy:
     template: linear
     x: training_iteration

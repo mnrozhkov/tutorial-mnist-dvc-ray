@@ -140,6 +140,7 @@ head_node_type: ray.head.default
 file_mounts: {
 #    "/path1/on/remote/machine": "/path1/on/local/machine",
     "/home/ray/tutorial-mnist-dvc-ray": ".",
+    "/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local": "./.dvc/config.local",
     "/home/ray/.aws/credentials": "~/.aws/ray-credentials",
 }
 
@@ -179,7 +180,7 @@ setup_commands:
     - pip install -U ray[default] 
     - pip install dvc[s3]==3.43.1 dvclive==3.41.1
     - pip install -U pyOpenSSL==24.0.0
-    - export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray:$PATH
+    - export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray
      
 
 # Custom commands that will be run on the head node after common setup.

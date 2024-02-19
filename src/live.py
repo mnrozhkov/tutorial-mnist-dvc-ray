@@ -83,16 +83,15 @@ class DVCLiveRayLogger(Live):
         self.storage = self._get_storage()
 
     def _get_storage(self):
-        # Create a new StorageObject instance when needed
+        # Create a new StorageObject instance
         return StorageObject(self.bucket_name, self.s3_directory)
 
     def next_step(self, *args, **kwargs):
-        
-        print("\nDVCLiveLogger: PUSH METRICS")
-        # storage = self._get_storage()
+        super().next_step(*args, **kwargs)
+
+        print("\nDVCLiveLogger: Push DVCLive metrics to S3")
         self.storage.push(self.dir, force=True)
 
-        super().next_step(*args, **kwargs)
 
 
 def download_folder_from_s3(bucket_name, s3_folder, local_dir_path):
