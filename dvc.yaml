@@ -2,18 +2,15 @@ stages:
 
   tune:
     cmd: python src/stages/tune.py --config params.yaml
-    # - ray job submit --working-dir . -- python src/stages/tune.py --config params.yaml
-    # - ray rsync_down cluster.yaml '/home/ray/tutorial-mnist-dvc-ray/${tune.results_dir}/' ./${tune.results_dir}
     params:
     - tune
     outs:
     - ${tune.results_dir}/best_params.yaml:
         cache: false
-        # persist: true
+        persist: true
 
   train:
     cmd: python src/stages/train.py --config params.yaml
-    # cmd: ray job submit --working-dir $PWD -- python src/stages/train.py --config params.yaml
     params:
     - train
     deps:
