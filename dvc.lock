@@ -5,8 +5,8 @@ stages:
     deps:
     - path: results/tune/best_params.yaml
       hash: md5
-      md5: 8bbf906f9f70175519914e879c9b44ca
-      size: 54
+      md5: 3fe99700bf525ad5824bea62111a6c09
+      size: 55
     params:
       params.yaml:
         train:
@@ -14,11 +14,11 @@ stages:
           use_gpu: false
           num_workers: 2
           global_batch_size: 32
-          epoch_size: 5
+          epoch_size: 10
     outs:
     - path: results/train/model.pth
       hash: md5
-      md5: 1a394ff62f452f961cfbd391aa3b5216
+      md5: 156930ed2a84a3a040f84cdc13aece13
       size: 9792
   tune:
     cmd: python src/stages/tune.py --config params.yaml
@@ -32,5 +32,5 @@ stages:
     outs:
     - path: results/tune/best_params.yaml
       hash: md5
-      md5: 8bbf906f9f70175519914e879c9b44ca
-      size: 54
+      md5: 3fe99700bf525ad5824bea62111a6c09
+      size: 55
