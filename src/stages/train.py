@@ -28,7 +28,6 @@ def train_func_per_worker(config: Dict):
     lr = config["lr"]
     epochs = config["epochs"]
     batch_size = config["batch_size_per_worker"]
-    DVC_ENV_VARS = config["dvc_env"]
 
     # Get dataloaders inside worker training function
     train_dataloader, test_dataloader = get_dataloaders(batch_size=batch_size)
@@ -49,11 +48,26 @@ def train_func_per_worker(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
-    # [3] Initialize DVC Live
+    # [3] Set up Live object for DVCLive
+    # ===============================
+    # Propogate DVC environment variables from Head Node to Workers
+    print("-------------------")
+    print("DVC_ENV_VARS - get from config.yaml")
+    print(config.get("dvc_env", None))
+    print("-------------------")
+    DVC_ENV_VARS = config.get("dvc_env", None)
+    if DVC_ENV_VARS:
+        for name, value in  DVC_ENV_VARS.items():
+            os.environ[name] = value
+    
+    # Initialize DVC Live
     live = None
     rank = ray.train.get_context().get_world_rank()
     if rank == 0:
-        live = Live(dir=os.path.join(DVC_ENV_VARS.get("DVC_ROOT", ""), "results/dvclive"))
+        live = Live(
+            dir=os.path.join(DVC_ENV_VARS.get("DVC_ROOT", ""), "results/dvclive"),
+            save_dvc_exp=False
+        )
 
     for epoch in range(epochs):
 
@@ -163,13 +177,6 @@ def train(params: dict) -> None:
         Path(result.path) / 'model.pth', 
         Path(TRAIN_RESULTS_DIR).resolve() /'model.pth'
     )
-
-    # print(f"Copying dvclive from {Path(result.path)} to {TRAIN_RESULTS_DIR}")
-    # shutil.copytree(
-    #     Path(result.path) / 'results/dvclive',  
-    #     'results/dvclive',
-    #      dirs_exist_ok=True
-    # )
 
 if __name__ == "__main__":
 
