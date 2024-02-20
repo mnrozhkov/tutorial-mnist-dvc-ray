@@ -1,5 +1,5 @@
 """
-Source: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
+Original: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
 """
 
 import argparse
@@ -50,23 +50,20 @@ def train_func_per_worker(config: Dict):
 
     # [3] Set up Live object for DVCLive
     # ===============================
-    # Propogate DVC environment variables from Head Node to Workers
-    print("-------------------")
-    print("DVC_ENV_VARS - get from config.yaml")
-    print(config.get("dvc_env", None))
-    print("-------------------")
-    DVC_ENV_VARS = config.get("dvc_env", None)
-    if DVC_ENV_VARS:
-        for name, value in  DVC_ENV_VARS.items():
-            os.environ[name] = value
-    
-    # Initialize DVC Live
     live = None
     rank = ray.train.get_context().get_world_rank()
     if rank == 0:
+
+        # Propogate DVC environment variables from Head Node to Workers
+        DVC_ENV_VARS = config.get("dvc_env", None)
+        if DVC_ENV_VARS:
+            for name, value in  DVC_ENV_VARS.items():
+                os.environ[name] = value
+        
+        # Initialize DVC Live
         live = Live(
             dir=os.path.join(DVC_ENV_VARS.get("DVC_ROOT", ""), "results/dvclive"),
-            save_dvc_exp=False
+            # save_dvc_exp=False
         )
 
     for epoch in range(epochs):
