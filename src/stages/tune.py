@@ -125,7 +125,6 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
     EPOCH_SIZE = tune_params.get("epoch_size", 256) 
     TEST_SIZE = tune_params.get("test_size", 128)
     TUNE_RESULTS_DIR = Path(params.get("tune", {}).get("results_dir"))
-    # tune_dir = Path(TUNE_RESULTS_DIR)
     TUNE_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     ray.init(num_cpus=2 if is_smoke_test else None)

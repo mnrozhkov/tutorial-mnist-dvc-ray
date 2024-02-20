@@ -1,8 +1,9 @@
 """
-Source: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
+Original: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
 """
 
 import argparse
+from dvclive import Live
 import json
 import shutil
 import os
@@ -47,8 +48,23 @@ def train_func_per_worker(config: Dict):
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
-    train_context = get_context()
-    rank = train_context.get_local_rank()
+    # [3] Set up Live object for DVCLive
+    # ===============================
+    live = None
+    rank = ray.train.get_context().get_world_rank()
+    if rank == 0:
+
+        # Propogate DVC environment variables from Head Node to Workers
+        DVC_ENV_VARS = config.get("dvc_env", None)
+        if DVC_ENV_VARS:
+            for name, value in  DVC_ENV_VARS.items():
+                os.environ[name] = value
+        
+        # Initialize DVC Live
+        live = Live(
+            dir=os.path.join(DVC_ENV_VARS.get("DVC_ROOT", ""), "results/dvclive"),
+            # save_dvc_exp=False
+        )
 
     for epoch in range(epochs):
 
@@ -80,17 +96,19 @@ def train_func_per_worker(config: Dict):
         checkpoint_dir = "."
         checkpoint_path = checkpoint_dir + "/model.pth"
         torch.save(model.state_dict(), checkpoint_path)
-        
-        ray.train.report(
-            metrics={"loss": test_loss, "accuracy": accuracy},
-            checkpoint=Checkpoint.from_directory(checkpoint_dir)
-        )
 
         # Log metrics with print() 
-        if rank == 0:
+        if live:
+            print("-------------------")
+            print(f"LOG METRICS WITH DVCLIVE")
             print("loss", test_loss)
             print("accuracy", accuracy)
-            print("---NEXT STEP---")
+            print("-------------------")
+            
+            live.log_metric("loss", test_loss)
+            live.log_metric("accuracy", accuracy)
+            live.next_step()
+            
 
 
 def train(params: dict) -> None:
@@ -103,24 +121,29 @@ def train(params: dict) -> None:
     GLOBAL_BATCH_SIZE = train_params.get("global_GLOBAL_batch_size", 32)
     EPOCH_SIZE = train_params.get("epoch_size", 5) 
     TRAIN_RESULTS_DIR = train_params.get("results_dir")
-
-    TUNE_RESULTS_DIR = params.get("tune", {}).get("results_dir", "")
+    
+    # [2] Load Best Model Parameters (from Tune stage)
+    # =============================================
+    TUNE_RESULTS_DIR = params.get("tune", {}).get("results_dir", "")    
     BEST_PARAMS_PATH = Path(TUNE_RESULTS_DIR) / "best_params.yaml"
     BEST_MODEL_PARAMS = yaml.safe_load(open(BEST_PARAMS_PATH))
-
     train_config = {
         "lr": BEST_MODEL_PARAMS.get("lr", 1e-2),
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
+
+        # Propogate DVC environment variables from Head Node to Workers 
+        "dvc_env": {
+            name: value for name, value in os.environ.items() if name.startswith("DVC")
+        }
     }
 
-    # [2] Configure computation resources
+    # [3] Configure computation resources
     # =============================================
     scaling_config = ScalingConfig(num_workers=NUM_WORKERS, use_gpu=USE_GPU)
-    # sync_config = ray.train.SyncConfig(sync_artifacts=True)
 
-    # [3] Initialize a Ray TorchTrainer
+    # [4] Initialize a Ray TorchTrainer
     # =============================================
     RAY_RESULTS_DIR = str(Path("results/ray_results").resolve())
     trainer = TorchTrainer(
@@ -130,49 +153,29 @@ def train(params: dict) -> None:
         run_config=RunConfig(
             name="MNIST",
             local_dir=RAY_RESULTS_DIR,
-            # storage_path=RAY_RESULTS_DIR,
-            # sync_config=sync_config
         )
     )
 
-    # [4] Start Distributed Training
+    # [5] Run Training
     # Run `train_func_per_worker` on all workers
     # =============================================
     result: train.Result  = trainer.fit()
+
     print(f"Training result: {result}")
-    print(f"result.filesystem: {result.filesystem}")
     print(f"result.path: {result.path}")
     print(f"result.metrics: {result.metrics}")
     print(f"result.metrics_dataframe: {result.metrics_dataframe}")
     print(f"result.config: {result.config}")
     
-    if result.checkpoint:
-        print(f"result.checkpoint.path: {result.checkpoint.path}")
-    
-    # Save Trial Results
-    train_metrics_df = result.metrics_dataframe
-    TRAIN_METRICS_PATH = "results/train/train_metrics.csv"
-    train_metrics_df.to_csv(TRAIN_METRICS_PATH)
-
-    train_report = {
-        'config': result.config,
-        'path': result.path,
-        'metrics': result.metrics,
-    }
-    with open('report.json', 'w') as f:
-        json.dump(train_report, f)
-    
-    DVCLIVE_PATH_SOURCE = Path(train_report.get('path'))
-    print(f"DVCLIVE_PATH_SOURCE: {DVCLIVE_PATH_SOURCE}")
-    for filename in ['result.json', 'model.pth']: 
-        shutil.copyfile(
-            DVCLIVE_PATH_SOURCE / filename, 
-            Path(TRAIN_RESULTS_DIR).resolve() / filename
-            )
+    # [6] Save Trial Results
+    # =============================================
+    print(f"Copying model.pth from {Path(result.path)} to {TRAIN_RESULTS_DIR}")
+    shutil.copy(
+        Path(result.path) / 'model.pth', 
+        Path(TRAIN_RESULTS_DIR).resolve() /'model.pth'
+    )
 
 if __name__ == "__main__":
-
-    # os.environ["RAY_AIR_LOCAL_CACHE_DIR"] = "results"
 
     parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
     parser.add_argument("--config", help="DVC parameters")
