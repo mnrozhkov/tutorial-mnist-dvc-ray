@@ -1,10 +1,4 @@
 # Source: https://github.com/ray-project/ray/blob/master/python/ray/autoscaler/aws/example-full.yaml 
-# Changes: 
-# - image: "rayproject/ray-ml:latest-cpu"
-# - InstanceType: g5.2xlarge
-# setup_commands: # Set up each node.
-#    - pip install ray transformers[torch] datasets scipy scikit-learn torch dvclive
-#    - mkdir dvclive
 
 # An unique identifier for the head node and workers of this cluster.
 cluster_name: tutorial-mnist-dvc-ray
@@ -23,25 +17,13 @@ upscaling_speed: 1.0
 # and opens all the necessary ports to support the Ray cluster.
 # Empty string means disabled.
 docker:
-    # image: "rayproject/ray-ml:latest-py310-cpu" 
     image: "rayproject/ray-ml@sha256:fa8c69ae055b92bf2f97e22c6a96ea835be60afa69c224d6e1275c3040833d0a" 
-    # image: "rayproject/ray-ml:latest-gpu" # You can change this to latest-cpu if you don't need GPU support and want a faster startup
-    # image: rayproject/ray:latest-py310-cpu   # use this one if you don't need ML dependencies, it's faster to pull
     container_name: "ray_container"
     # If true, pulls latest version of image. Otherwise, `docker run` will only pull the image
     # if no cached version is present.
     pull_before_run: True
     run_options:   # Extra options to pass into "docker run"
         - --ulimit nofile=65536:65536
-
-    # Example of running a GPU head with CPU workers
-    # head_image: "rayproject/ray:latest-py310-cpu"
-    # Allow Ray to automatically detect GPUs
-
-    # worker_image: "rayproject/ray-ml:latest-cpu"
-    # worker_image: "rayproject/ray-ml:latest-py310-cpu" 
-    # worker_image: "rayproject/ray-ml@sha256:fa8c69ae055b92bf2f97e22c6a96ea835be60afa69c224d6e1275c3040833d0a" 
-    # worker_run_options: []
 
 # If a node is idle for this many minutes, it will be removed.
 idle_timeout_minutes: 5
@@ -148,9 +130,7 @@ file_mounts: {
 # list of paths. The same path on the head node will be copied to the worker node.
 # This behavior is a subset of the file_mounts behavior. In the vast majority of cases
 # you should just use file_mounts. Only use this if you know what you're doing!
-cluster_synced_files: [
-    # "/home/ray/.aws/credentials"
-]
+cluster_synced_files: []
 
 # Whether changes to directories in file_mounts or cluster_synced_files in the head node
 # should sync to the worker node continuously
@@ -180,7 +160,6 @@ setup_commands:
     - pip install -U ray[default] 
     - pip install dvc[s3]==3.43.1 dvclive==3.41.1
     - pip install -U pyOpenSSL==24.0.0
-    - export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray
      
 
 # Custom commands that will be run on the head node after common setup.
