@@ -8,6 +8,21 @@ import time
 import threading
 from dvclive import Live
 
+
+def parse_studio_token(file_path: str) -> str | None:
+
+    try: 
+        with open(file_path, 'r') as config_file:
+            for line in config_file:
+                # Check if the line contains the token assignment
+                if 'token =' in line:
+                    # Extract the token value
+                    token = line.split('=')[1].strip()
+                    return token    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
 class StorageObject:
     def __init__(self, bucket_name: str, s3_directory: str):
         self.bucket_name = bucket_name

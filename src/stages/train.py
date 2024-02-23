@@ -18,7 +18,7 @@ from torch import nn
 
 from src.helpers import get_dataloaders
 from src.model import ConvNet
-from src.live import download_file_from_s3, download_folder_from_s3, list_objects_in_s3_folder
+from src.live import parse_studio_token, download_file_from_s3, download_folder_from_s3, list_objects_in_s3_folder
 
 
 def train_func_per_worker(config: Dict):
@@ -49,13 +49,18 @@ def train_func_per_worker(config: Dict):
     # [3] Set up Live object for DVCLive
     # ===============================
     print("#############################################")
-    print("DVC_ENV_VARS - get from config.yaml")
-    print(config.get("dvc_env", None))
+    print("Working dir: ", os.getcwd())
+    print("DVC_ENV_VARS: ", config.get("dvc_env", None))
     print("#############################################")
+    # Set DVC environment variables from `dvc_env` in `config`
     dvc_env = config.get("dvc_env", None)
     if dvc_env:
         for name, value in  dvc_env.items():
             os.environ[name] = value
+    # Set DVC_STUDIO_TOKEN from DVC config.local file
+    studio_token = parse_studio_token("/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local")
+    if studio_token:
+        os.environ['DVC_STUDIO_TOKEN'] = studio_token
 
     live = None
     if worker_rank == 0:
@@ -156,9 +161,8 @@ def train(params: dict) -> None:
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
         
         # Propogate DVC environment variables from Head Node to Workers 
-        "dvc_env": {
-            name: value for name, value in os.environ.items() if name.startswith("DVC")
-        }
+        "dvc_env": {name: value for name, value in os.environ.items() if
+                    name.startswith("DVC") and name != "DVC_STUDIO_TOKEN"}
     }
 
     # [2] Configure computation resources
