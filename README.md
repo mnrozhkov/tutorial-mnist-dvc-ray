@@ -9,6 +9,13 @@ This tutorial will guide users through creating automated, scalable, and distrib
 
 ![DVC + Ray](src/static/preview.png "DVC + Ray")
 
+## Branch Structure
+
+| Branch       | Details                                 | Set up instructions                                           |
+|--------------|-----------------------------------------|---------------------------------------------------------------|
+| `main`       | For local Ray cluster setups.           | Follow the [Run DVC pipeline on Ray Cluster (local)](#run-dvc-pipeline-on-ray-cluster-local) section. |
+| `cloud`      | For cloud-based Ray cluster on AWS.     | Follow the [Run DVC pipeline on Ray Cluster (AWS)](#run-dvc-pipeline-on-ray-cluster-aws) section.   |
+
 ## Install
 
 ```bash
@@ -100,7 +107,9 @@ Also, you may want to execute `shell` commands on a cluster
 ray exec cluster.yaml 'echo "hello world"'
 ```
 
-### 4 - (option 1) Connect to the cluster and run DVC pipeline
+### 4 - Run DVC experiment on Ray Cluster
+
+#### 4.1 Run from the Head Node (option 1)
 
 Connect to the session on the cluster
 
@@ -108,25 +117,18 @@ Connect to the session on the cluster
 ray attach cluster.yaml
 ```
 
-Run ML pipeline with DVC and commit results
+Run ML pipeline with DVC on the cluster
 
 ```bash
-# Clone repo to the cluster
-git clone https://github.com/mnrozhkov/tutorial-mnist-dvc-ray.git
-
 # Navigate to the repo & run 
 cd tutorial-mnist-dvc-ray
+
+# Run DVC experiment
 export PYTHONPATH=/home/ray/tutorial-mnist-dvc-ray
 dvc exp run
 ```
 
-### 5 - (option 1) Run DVC pipeline on Ray Cluster from a laptop
-
-Clone repo to the cluster
-
-```bash
-ray exec cluster.yaml "git clone https://github.com/mnrozhkov/tutorial-mnist-dvc-ray.git"
-```
+#### 4.2 - Run from laptop (option 2)
 
 Execute `dvc exp run` command on the cluster
 
@@ -144,7 +146,6 @@ ray rsync_down cluster.yaml '/home/ray/tutorial-mnist-dvc-ray/' $PWD
 ```
 
 Commit results if needed.
-
 
 ### 6 - Stop Cluster
 
