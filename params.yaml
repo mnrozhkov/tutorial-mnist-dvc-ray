@@ -1,7 +1,5 @@
 tune: 
   run_tune: True
-  epoch_size: 512
-  test_size: 256
   results_dir: results/tune
 
 train:

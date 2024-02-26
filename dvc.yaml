@@ -3,7 +3,9 @@ stages:
   tune:
     cmd: python src/stages/tune.py --config params.yaml
     params:
-    - tune
+    - src/stages/tune.py:
+        - EPOCH_SIZE
+        - TEST_SIZE
     outs:
     - ${tune.results_dir}/best_params.yaml:
         cache: false

@@ -24,8 +24,8 @@ from src.model import ConvNet
 import yaml
 
 
-# Change these values if you want the training to run quicker or slower.
-EPOCH_SIZE = 512
+# DVC Tracking Parameters
+EPOCH_SIZE = 128
 TEST_SIZE = 256
 
 
@@ -122,18 +122,17 @@ def tune_hyperparameters(params: dict, is_cuda: bool, is_smoke_test: bool):
         print("Tune - Skipping Hyperparameter Tuning")
         return
 
-    EPOCH_SIZE = tune_params.get("epoch_size", 256) 
-    TEST_SIZE = tune_params.get("test_size", 128)
+    # EPOCH_SIZE = tune_params.get("epoch_size", 256) 
+    # TEST_SIZE = tune_params.get("test_size", 128)
     TUNE_RESULTS_DIR = Path(params.get("tune", {}).get("results_dir"))
-    # tune_dir = Path(TUNE_RESULTS_DIR)
     TUNE_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # [2] Configure computation resources
+    # =============================================
     ray.init(num_cpus=2 if is_smoke_test else None)
-
-    # for early stopping
     sched = AsyncHyperBandScheduler()
-
     resources_per_trial = {"cpu": 2, "gpu": int(is_cuda)}  # set this for GPUs
+
     tuner = tune.Tuner(
         tune.with_resources(train_mnist, resources=resources_per_trial),
         tune_config=tune.TuneConfig(
@@ -201,7 +200,11 @@ if __name__ == "__main__":
     )
     args, _ = parser.parse_known_args()
 
+    # [1] Load config
+    # =============================================
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
         
+    # [2] Start Tuning
+    # =============================================
     tune_hyperparameters(params, args.cuda, args.smoke_test)
