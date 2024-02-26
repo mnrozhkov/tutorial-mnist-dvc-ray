@@ -3,7 +3,9 @@ stages:
   tune:
     cmd: python src/stages/tune.py --config params.yaml
     params:
-    - tune
+    - src/stages/tune.py:
+        - EPOCH_SIZE
+        - TEST_SIZE
     outs:
     - ${tune.results_dir}/best_params.yaml:
         cache: false
@@ -21,11 +23,19 @@ stages:
 metrics:
 - results/dvclive/metrics.json
 plots:
-- training_iteration vs accuracy:
-    template: linear
-    x: training_iteration
-    y:
-      results/train/train_metrics.csv: accuracy
-- results/dvclive/plots/metrics:
+- accuracy:
     x: step
+    y:
+      results/dvclive/plots/metrics/accuracy.tsv: accuracy
+    title: Accuracy
+    x_label: Step
+    y_label: Accuracy
+- loss:
+    template: simple
+    x: step
+    y:
+      results/dvclive/plots/metrics/loss.tsv: loss
+    title: Loss
+    x_label: Step
+    y_label: Accuracy
 - results/tune/plots/images

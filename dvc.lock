@@ -14,12 +14,12 @@ stages:
           use_gpu: false
           num_workers: 2
           global_batch_size: 32
-          epoch_size: 5
+          epoch_size: 3
     outs:
     - path: results/train/model.pth
       hash: md5
-      md5: e01ff53dad8be72b2e049ecfb31f66e5
-      size: 9792
+      md5: 5ebf3841a9c4fdb9c441f8a7efe24816
+      size: 9363
   tune:
     cmd: python src/stages/tune.py --config params.yaml
     params:
