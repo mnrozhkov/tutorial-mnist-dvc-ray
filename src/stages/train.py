@@ -1,5 +1,5 @@
 """
-Source: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
+Original: https://docs.ray.io/en/latest/ray-overview/getting-started.html 
 """
 
 import argparse
@@ -48,26 +48,28 @@ def train_func_per_worker(config: Dict):
 
     # [3] Set up Live object for DVCLive
     # ===============================
-    print("#############################################")
-    print("Working dir: ", os.getcwd())
-    print("DVC_ENV_VARS: ", config.get("dvc_env", None))
-    print("#############################################")
-    # Set DVC environment variables from `dvc_env` in `config`
-    dvc_env = config.get("dvc_env", None)
-    if dvc_env:
-        for name, value in  dvc_env.items():
-            os.environ[name] = value
-    # Set DVC_STUDIO_TOKEN from DVC config.local file
-    studio_token = parse_studio_token("/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local")
-    if studio_token:
-        os.environ['DVC_STUDIO_TOKEN'] = studio_token
-
     live = None
     if worker_rank == 0:
-                
+
+        print("#############################################")
+        print("Working dir: ", os.getcwd())
+        print("DVC_ENV_VARS: ", config.get("dvc_env", None))
+        print("#############################################")
+        
+        # Propogate DVC environment variables from Head Node to Workers
+        dvc_env = config.get("dvc_env", None)
+        if dvc_env:
+            for name, value in  dvc_env.items():
+                os.environ[name] = value
+        
+        # Set DVC_STUDIO_TOKEN from DVC config.local file
+        studio_token = parse_studio_token("/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local")
+        if studio_token:
+            os.environ['DVC_STUDIO_TOKEN'] = studio_token
+        
+        # Initialize DVC Live    
         from src.live import DVCLiveRayLogger as Live
         live = Live(
-            # dir=os.path.join(os.environ.get("DVC_ROOT", ""), "results/dvclive"),
             dir="results/dvclive",
             save_dvc_exp=True, 
             bucket_name = "cse-cloud-version",
