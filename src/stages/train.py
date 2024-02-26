@@ -74,6 +74,7 @@ def train_func_per_worker(config: Dict):
             save_dvc_exp=True, 
             bucket_name = "cse-cloud-version",
             s3_directory = "tutorial-mnist-dvc-ray/dvclive",  
+            dvcyaml=None
         )
 
         print("#############################################")
