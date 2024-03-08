@@ -10,6 +10,7 @@ from tqdm import tqdm
 import yaml
 
 import ray
+from ray.runtime_env import RuntimeEnv
 from ray.train import ScalingConfig, RunConfig, SyncConfig
 from ray.train.torch import TorchTrainer
 from ray.train import Checkpoint
@@ -42,7 +43,6 @@ def train_func_per_worker(config: Dict):
     # ============================================================
     model = ConvNet()
     model = ray.train.torch.prepare_model(model)
-
     loss_fn = nn.CrossEntropyLoss()
     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
 
@@ -51,22 +51,6 @@ def train_func_per_worker(config: Dict):
     live = None
     if worker_rank == 0:
 
-        print("#############################################")
-        print("Working dir: ", os.getcwd())
-        print("DVC_ENV_VARS: ", config.get("dvc_env", None))
-        print("#############################################")
-        
-        # Propogate DVC environment variables from Head Node to Workers
-        dvc_env = config.get("dvc_env", None)
-        if dvc_env:
-            for name, value in  dvc_env.items():
-                os.environ[name] = value
-        
-        # Set DVC_STUDIO_TOKEN from DVC config.local file
-        studio_token = parse_studio_token("/home/ray/tutorial-mnist-dvc-ray/.dvc/config.local")
-        if studio_token:
-            os.environ['DVC_STUDIO_TOKEN'] = studio_token
-        
         # Initialize DVC Live    
         from src.live import DVCLiveRayLogger as Live
         live = Live(
@@ -86,6 +70,7 @@ def train_func_per_worker(config: Dict):
         print("TRIAL_NAME", ray.train.get_context().get_trial_name())
         print("Live.dir", live.dir)
         print("Live.params_file", live.params_file)
+        print("DVC_ENV_VARS: ", {k: v for k, v in os.environ.items() if  k.startswith("DVC")})
         print("#############################################")
 
     for epoch in range(epochs):
@@ -162,10 +147,6 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
-        
-        # Propogate DVC environment variables from Head Node to Workers 
-        "dvc_env": {name: value for name, value in os.environ.items() if
-                    name.startswith("DVC") and name != "DVC_STUDIO_TOKEN"}
     }
 
     # [2] Configure computation resources
@@ -237,11 +218,16 @@ if __name__ == "__main__":
     parser.add_argument("--config", help="DVC parameters")
     args, _ = parser.parse_known_args()
 
-    # [1] Load config
+    # [1] Propogate DVC environment variables from Head Node to Workers 
+    # =============================================
+    DVC_ENV_VARS = {k: v for k, v in os.environ.items() if  k.startswith("DVC")}
+    ray.init(runtime_env=RuntimeEnv(env_vars=DVC_ENV_VARS))
+    
+    # [2] Load config
     # =============================================
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
 
-    # [2] Start Training
+    # [3] Start Training
     # =============================================
     train(params)

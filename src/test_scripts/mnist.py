@@ -66,6 +66,7 @@ class NeuralNetwork(nn.Module):
 
 
 def train_func_per_worker(config: Dict):
+
     lr = config["lr"]
     epochs = config["epochs"]
     batch_size = config["batch_size_per_worker"]
@@ -91,7 +92,6 @@ def train_func_per_worker(config: Dict):
 
     # [2.2] Create context
     # ============================================================
-    # from ray.train import get_context
     train_context = ray.train.get_context()
     rank = train_context.get_world_rank()
 
@@ -154,21 +154,12 @@ def train_fashion_mnist(num_workers=2, use_gpu=False):
 
     train_config = {
         "lr": 1e-3,
-        "epochs": 3,
+        "epochs": 5,
         "batch_size_per_worker": global_batch_size // num_workers,
     }
 
     # Configure computation resources
     scaling_config = ScalingConfig(num_workers=num_workers, use_gpu=use_gpu)
-
-
-    # Callback 
-    
-    def on_train_epoch_end(self, trainer, pl_module):
-        metrics = trainer.callback_metrics
-        metrics = {k: v.item() for k, v in metrics.items()}
-
-        train.report(metrics=metrics)
 
     # Initialize a Ray TorchTrainer
     trainer = TorchTrainer(
@@ -185,4 +176,5 @@ def train_fashion_mnist(num_workers=2, use_gpu=False):
 
 
 if __name__ == "__main__":
+
     train_fashion_mnist(num_workers=4, use_gpu=False)
