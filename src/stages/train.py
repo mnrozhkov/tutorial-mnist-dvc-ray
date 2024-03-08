@@ -13,6 +13,7 @@ from tqdm import tqdm
 import yaml
 
 import ray
+from ray.runtime_env import RuntimeEnv
 from ray.train import ScalingConfig, RunConfig
 from ray.train.torch import TorchTrainer
 from ray.train import Checkpoint
@@ -54,16 +55,9 @@ def train_func_per_worker(config: Dict):
     rank = ray.train.get_context().get_world_rank()
     if rank == 0:
 
-        # Propogate DVC environment variables from Head Node to Workers
-        DVC_ENV_VARS = config.get("dvc_env", None)
-        if DVC_ENV_VARS:
-            for name, value in  DVC_ENV_VARS.items():
-                os.environ[name] = value
-        
         # Initialize DVC Live
         live = Live(
-            dir=os.path.join(DVC_ENV_VARS.get("DVC_ROOT", ""), "results/dvclive"),
-            # save_dvc_exp=False
+            dir=os.path.join(os.environ.get("DVC_ROOT",""), "results/dvclive"),
         )
 
     for epoch in range(epochs):
@@ -132,11 +126,6 @@ def train(params: dict) -> None:
         "momentum": BEST_MODEL_PARAMS.get("momentum", 0.5),
         "epochs": EPOCH_SIZE,
         "batch_size_per_worker": GLOBAL_BATCH_SIZE // NUM_WORKERS,
-
-        # Propogate DVC environment variables from Head Node to Workers 
-        "dvc_env": {
-            name: value for name, value in os.environ.items() if name.startswith("DVC")
-        }
     }
 
     # [3] Configure computation resources
@@ -180,8 +169,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="PyTorch MNIST Tune Example")
     parser.add_argument("--config", help="DVC parameters")
     args, _ = parser.parse_known_args()
+
+    # [1] Propogate DVC environment variables from Head Node to Workers 
+    # =============================================
+    DVC_ENV_VARS = {k: v for k, v in os.environ.items() if  k.startswith("DVC")}
+    ray.init(runtime_env=RuntimeEnv(env_vars=DVC_ENV_VARS))
     
+    # [2] Load config
+    # =============================================
     with open(args.config, 'r') as f:
         params = yaml.safe_load(f)
 
+    # [3] Start Training
+    # =============================================
     train(params)
